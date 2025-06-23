@@ -17,6 +17,8 @@ bin/
 *.iws
 
 # Database (HSQLDB)
+data/
+temp/
 *.data
 *.script
 *.backup
