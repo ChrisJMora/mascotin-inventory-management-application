@@ -1,0 +1,41 @@
+# OpenXava
+/xava/
+/target/
+*.war
+*.ear
+
+# Archivos de Eclipse/IDE
+.classpath
+.project
+.settings/
+bin/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Database (HSQLDB)
+*.data
+*.script
+*.backup
+*.lobs
+/db/
+
+# Logs y temporales
+*.log
+*.tmp
+*.swp
+*.bak
+*.orig
+*~
+
+# Configuración local y sensible
+*.properties
+!src/main/resources/*.properties  # Excluye todos EXCEPTO los de resources
+.env
+
+# Sistema
+.DS_Store
+Thumbs.db
