@@ -179,6 +179,7 @@
 				<configuration>
 					<configLocation>google_checks.xml</configLocation>
 					<failOnViolation>true</failOnViolation>
+					<consoleOutput>true</consoleOutput>
 				</configuration>
 				<dependencies>
 					<dependency>
@@ -187,6 +188,14 @@
 						<version>30.1.1-jre</version>
 					</dependency>
 				</dependencies>
+				<executions>
+					<execution>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
