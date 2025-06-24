@@ -1,0 +1,55 @@
+# Nombre del workflow que aparecerá en la pestaña "Actions" de GitHub
+name: Code Quality Check
+
+# El workflow se ejecuta cuando se abre o actualiza un Pull Request hacia "develop"
+on:
+  pull_request:
+    branches: [ develop ]
+    types: [ opened, synchronize, reopened ]
+
+# Configuración de permisos para el token automático de GitHub
+permissions:
+  contents: read           # Permite leer el contenido del repositorio
+  pull-requests: write     # Permite escribir comentarios en Pull Requests
+
+jobs:
+  # Job principal de verificación de calidad de código
+  quality-check:
+    runs-on: ubuntu-latest   # Usa la última versión del runner Ubuntu en la nube
+
+    steps:
+      # Paso 1: Clona el repositorio con el código del PR
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Paso 2: Instala Java 11 desde Temurin
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      # Paso 3: Cache de Maven para acelerar builds
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      # Paso 4: Ejecuta Checkstyle y genera el reporte HTML
+      - name: Generate Checkstyle HTML report
+        run: mvn checkstyle:checkstyle
+
+      # Paso 5: Ejecuta la verificación que puede fallar el workflow
+      - name: Run Checkstyle verification
+        run: mvn checkstyle:check
+
+      # Paso 5: Sube el reporte HTML como artefacto descargable
+      - name: Upload Checkstyle HTML report
+        if: always()  # Siempre sube el reporte, incluso si hay errores
+        uses: actions/upload-artifact@v3
+        with:
+          name: checkstyle-report
+          path: target/site/checkstyle.html
+          retention-days: 30
