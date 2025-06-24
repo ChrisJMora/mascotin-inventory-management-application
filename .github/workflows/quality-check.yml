@@ -48,7 +48,7 @@ jobs:
       # Paso 5: Sube el reporte HTML como artefacto descargable
       - name: Upload Checkstyle HTML report
         if: always()  # Siempre sube el reporte, incluso si hay errores
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: checkstyle-report
           path: target/site/checkstyle.html
