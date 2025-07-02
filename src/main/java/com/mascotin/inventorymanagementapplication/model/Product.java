@@ -2,6 +2,7 @@ package com.mascotin.inventorymanagementapplication.model;
 import com.mascotin.inventorymanagementapplication.model.catalogue.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.junit.jupiter.api.DisplayName;
 import org.openxava.annotations.*;
 import javax.persistence.*;
 import javax.validation.ValidationException;
@@ -58,10 +59,10 @@ public abstract class Product {
     private int Stock;
 
     @Column(name = "CATEGORY", insertable = false, updatable = false)
-    private String Categoria;
+    private String category;
 
     public String getCategory() {
-        return this.getClass().getSimpleName(); // Food, Accessory, etc.
+        return this.getClass().getSimpleName();
     }
 
     @PrePersist @PreUpdate
