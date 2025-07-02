@@ -1,5 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model.catalogue;
 
-public enum Specie {
-    Perro, Gato, Ave, Todas
+public enum AccessoryType {
+    Juguete, Artículo_de_Aseo, Ropa
 }

@@ -1,21 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model.catalogue;
 
-import lombok.Getter;
-import lombok.Setter;
-import org.openxava.annotations.Hidden;
-import org.openxava.annotations.Required;
-
-import javax.persistence.*;
-
-@Entity
-@Getter @Setter
-public class Manufacturer {
-
-    @Id @Hidden
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(length = 100, unique = true)
-    @Required
-    private String name;
+public enum Manufacturer {
+    Soldis, Disasvet, Equadis, Portalvet
 }
