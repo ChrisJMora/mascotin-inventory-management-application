@@ -21,13 +21,25 @@
 			<artifactId>openxava</artifactId>
 			<version>${openxava.version}</version>
 		</dependency>
-		
-		<!-- 
-		To access to your database uncomment the corresponding entry 
-		from the below dependencies. If you don't find yours, look in
-		internet for the maven depencency for your database and add it 
-		here yourself.
-		-->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>RELEASE</version>
+            <scope>compile</scope>
+        </dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>RELEASE</version>
+			<scope>compile</scope>
+		</dependency>
+
+		<!--
+        To access to your database uncomment the corresponding entry
+        from the below dependencies. If you don't find yours, look in
+        internet for the maven depencency for your database and add it
+        here yourself.
+        -->
 		
 		<!-- MySQL 
 		<dependency>
