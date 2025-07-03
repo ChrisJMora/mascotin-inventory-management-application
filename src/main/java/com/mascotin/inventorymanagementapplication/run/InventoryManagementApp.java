@@ -7,10 +7,10 @@ import org.openxava.util.*;
  *
  * With OpenXava Studio/Eclipse: Right mouse button > Run As > Java Application
  */
+@SuppressWarnings({"PMD.UseUtilityClass","PMD.SignatureDeclareThrowsException"})
+public final class InventoryManagementApp {
 
-public class inventorymanagementapplication {
-
-	public static void main(String[] args) throws Exception {
+	public static void main(final String[] args) throws Exception {
 		DBServer.start("inventorymanagementapplication-db"); // To use your own database comment this line and configure src/main/webapp/META-INF/context.xml
 		AppServer.run("inventorymanagementapplication"); // Use AppServer.run("") to run in root context
 	}

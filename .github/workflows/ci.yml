@@ -1,0 +1,107 @@
+# Nombre del workflow
+name: Validación de Pull Request y Despliegue de Reportes
+
+# Descripción: Este workflow valida pull requests en la rama 'develop' con Checkstyle, PMD y cobertura mínima JaCoCo.
+# Luego genera y publica los reportes (incluyendo pmd.html) en GitHub Pages.
+
+# Permisos mínimos necesarios para ejecutar el workflow
+permissions:
+  contents: read      # Lectura del repositorio
+  pages: write        # Permiso para publicar en GitHub Pages
+  id-token: write     # Permiso para autenticación con Pages
+
+# Evento que activa el workflow
+on:
+  pull_request:
+    branches:
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+# Cancelación de ejecuciones anteriores en el mismo PR para optimizar recursos
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Job de validación estricta: falla si Checkstyle, PMD o cobertura no se cumplen
+  validate:
+    name: Validaciones de Código Estático
+    runs-on: ubuntu-latest
+
+    steps:
+      # Paso 1: Clonar el repositorio
+      - name: Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Clona todo el historial para análisis más precisos
+
+      # Paso 2: Configurar JDK 11
+      - name: Configurar JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # Paso 3: Validar formato con Checkstyle
+      - name: Validar formato con Checkstyle
+        run: mvn checkstyle:check -B -f pom.xml
+        # Falla si hay violaciones de estilo según google_checks.xml
+
+      # Paso 4: Ejecutar pruebas y verificar cobertura
+      - name: Verificar cobertura de código
+        run: mvn verify jacoco:check -B -f pom.xml
+        # Falla si la cobertura no alcanza el umbral mínimo configurado
+
+      # Paso 5: Validar reglas de PMD
+      - name: Validar reglas de PMD
+        run: mvn pmd:check -B -f pom.xml
+        # Falla si hay violaciones de las reglas PMD personalizadas
+
+  # Job de generación de reportes y despliegue (se ejecuta siempre, incluso si validate falla)
+  deploy-reports:
+    name: Generar y Desplegar Reportes
+    runs-on: ubuntu-latest
+    needs: validate
+    if: always()  # Se ejecuta siempre, incluso si validate falla
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      # Paso 1: Clonar el repositorio
+      - name: Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Paso 2: Configurar JDK 11
+      - name: Configurar JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # Paso 3: Ejecutar verificación completa y generación de reportes, ignorando errores
+      - name: Generar reportes (PMD, Checkstyle, JaCoCo, etc.)
+        run: mvn site verify -B -f pom.xml
+        continue-on-error: true
+        # Aunque falle por violaciones, continúa con el despliegue
+
+      # Paso 4: Subir reportes generados como artefacto para GitHub Pages
+      - name: Subir reportes para despliegue
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'target/site'
+
+      # Paso 5: Desplegar reportes en GitHub Pages
+      - name: Desplegar reportes
+        id: deployment
+        uses: actions/deploy-pages@v4
