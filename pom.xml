@@ -22,6 +22,21 @@
 		<!-- OpenXava applications work nicely with Java 1.8, 11, 17 and 21 -->
 		<maven.compiler.source>11</maven.compiler.source>
 		<maven.compiler.target>11</maven.compiler.target>
+
+		<!-- Versiones de dependencias -->
+		<junit.version>5.9.2</junit.version>
+
+		<!-- Versiones de plugins -->
+		<checkstyle.version>3.3.1</checkstyle.version>
+		<jacoco.version>0.8.11</jacoco.version>
+		<pmd.version>3.21.0</pmd.version>
+		<maven.site.plugin.version>3.12.1</maven.site.plugin.version>
+		<maven.compiler.plugin.version>3.11.0</maven.compiler.plugin.version>
+		<maven.surefire.plugin.version>3.2.1</maven.surefire.plugin.version>
+		<maven.surefire.report.plugin.version>3.2.1</maven.surefire.report.plugin.version>
+		<maven.enforcer.plugin.version>3.3.0</maven.enforcer.plugin.version>
+		<maven.javadoc.plugin.version>3.5.0</maven.javadoc.plugin.version>
+		<maven.source.plugin.version>3.2.1</maven.source.plugin.version>
 	</properties>
 
 	<dependencies>
