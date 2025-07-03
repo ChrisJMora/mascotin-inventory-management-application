@@ -39,6 +39,19 @@
 		<maven.source.plugin.version>3.2.1</maven.source.plugin.version>
 	</properties>
 
+	<!-- ===== GESTIÓN DE DEPENDENCIAS ===== -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.junit</groupId>
+				<artifactId>junit-bom</artifactId>
+				<version>${junit.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.openxava</groupId>
