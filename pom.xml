@@ -7,6 +7,15 @@
 	<version>1.0-SNAPSHOT</version>
 	<packaging>war</packaging>
 
+	<name>Aplicación de Gestión de Inventario</name>
+	<description>
+		Herramienta desarrollada para el control eficiente del inventario en una tienda de mascotas. La aplicación ofrece las siguientes funcionalidades clave:
+		• Administración de Productos: Permite crear, actualizar, consultar y eliminar productos del catálogo, organizados en tres categorías principales: Alimentos, Accesorios e Insumos Veterinarios. Cada producto incluye información detallada como especificaciones técnicas, datos comerciales y segmentación por tipo de mascota.
+		• Planificación Inteligente de Reposición: Genera planes automáticos de reposición a partir del análisis de demanda histórica, niveles de inventario actuales y presupuestos definidos. El sistema detecta productos críticos, calcula cantidades óptimas de reposición y emite alertas por exceso o escasez de stock.
+		• Análisis y Reportes: Proporciona herramientas de filtrado, ordenamiento y análisis para apoyar la toma de decisiones, facilitando la identificación de patrones de consumo y evaluaciones de desempeño comercial.
+	</description>
+	<url>https://github.com/ChrisJMora/mascotin-inventory-management-application.git</url>
+
 	<properties>
 		<openxava.version>7.5.2</openxava.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
