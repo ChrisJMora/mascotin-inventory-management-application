@@ -5,7 +5,7 @@ import org.openxava.util.*;
 /**
  * Execute this class to start the application.
  *
- * With OpenXava Studio/Eclipse: Right mouse button > Run As > Java Application
+ * With OpenXava Studio/Eclipse: Right mouse button &gt; Run As &gt; Java Application
  */
 @SuppressWarnings({"PMD.UseUtilityClass","PMD.SignatureDeclareThrowsException"})
 public final class InventoryManagementApp {
