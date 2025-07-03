@@ -1,5 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model.catalogue;
 
 public enum Brand {
-    Agripac, Pronaca, Bioalimentar, Purina, Albex
+    AGRIPAC, PRONACA, BIOALIMENTAR, PURINA, ALBEX
 }
