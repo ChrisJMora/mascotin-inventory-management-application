@@ -16,6 +16,7 @@
 	</description>
 	<url>https://github.com/ChrisJMora/mascotin-inventory-management-application.git</url>
 
+	<!-- ===== PROPIEDADES DEL PROYECTO ===== -->
 	<properties>
 		<openxava.version>7.5.2</openxava.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -149,6 +150,7 @@
 		
 	</dependencies>
 
+	<!-- ===== CONFIGURACIÓN DE CONSTRUCCIÓN ===== -->
 	<build>
 		<finalName>inventorymanagementapplication</finalName>
 		<plugins>
@@ -199,40 +201,177 @@
 						WEB-INF/lib/xml-apis-*.jar</packagingExcludes>
 				</configuration>
 			</plugin>
-			
+
+			<!-- 1. PLUGIN DE COMPILACIÓN -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>${maven.compiler.plugin.version}</version>
+			</plugin>
+
+			<!-- 2. PLUGIN PARA EJECUCIÓN DE PRUEBAS -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<version>3.2.5</version>
-				<configuration>
-					<skipTests>true</skipTests>
-				</configuration>
+				<version>${maven.surefire.plugin.version}</version>
 			</plugin>
 
+			<!-- 3. ENFORCER PLUGIN -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>${maven.enforcer.plugin.version}</version>
+				<executions>
+					<execution>
+						<id>enforce-versions</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireMavenVersion>
+									<version>3.6.0</version>
+								</requireMavenVersion>
+								<requireJavaVersion>
+									<version>11</version>
+								</requireJavaVersion>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- 4. CHECKSTYLE -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-checkstyle-plugin</artifactId>
-				<version>3.1.0</version>
+				<version>${checkstyle.version}</version>
 				<configuration>
 					<configLocation>google_checks.xml</configLocation>
-					<failOnViolation>true</failOnViolation>
 					<consoleOutput>true</consoleOutput>
+					<failsOnError>true</failsOnError>
+					<linkXRef>false</linkXRef>
 				</configuration>
-				<dependencies>
-					<dependency>
-						<groupId>com.google.guava</groupId>
-						<artifactId>guava</artifactId>
-						<version>30.1.1-jre</version>
-					</dependency>
-				</dependencies>
 				<executions>
 					<execution>
+						<id>validate</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- 5. PMD -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-pmd-plugin</artifactId>
+				<version>${pmd.version}</version>
+				<configuration>
+					<rulesets>
+						<ruleset>src/main/resources/pmd/custom-pmd-ruleset.xml</ruleset>
+					</rulesets>
+					<printFailingErrors>true</printFailingErrors>
+					<includeTests>true</includeTests>
+				</configuration>
+				<executions>
+					<!-- Ejecución para generar reportes (siempre se ejecuta) -->
+					<execution>
+						<id>pmd-analysis</id>
+						<phase>pre-site</phase> <!-- Se ejecuta antes de site -->
+						<goals>
+							<goal>pmd</goal>
+							<goal>cpd</goal>
+						</goals>
+					</execution>
+
+					<!-- Ejecución para fallar el build (se ejecuta después) -->
+					<execution>
+						<id>pmd-verify</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<failOnViolation>true</failOnViolation>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- 6. JACOCO -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco.version}</version>
+
+				<configuration>
+					<excludes>
+						<exclude>com/mascotin/inventorymanagementapplication/run/inventorymanagementapplication.class</exclude>
+					</excludes>
+				</configuration>
+
+				<executions>
+					<execution>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+
+					<execution>
+						<id>check</id>
 						<phase>verify</phase>
 						<goals>
 							<goal>check</goal>
 						</goals>
 					</execution>
 				</executions>
+			</plugin>
+
+			<!-- 7. JAVADOC -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<version>${maven.javadoc.plugin.version}</version>
+				<executions>
+					<execution>
+						<id>attach-javadocs</id>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- 8. SOURCES -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+				<version>${maven.source.plugin.version}</version>
+				<executions>
+					<execution>
+						<id>attach-sources</id>
+						<goals>
+							<goal>jar-no-fork</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- 9. MAVEN SITE -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-site-plugin</artifactId>
+				<version>${maven.site.plugin.version}</version>
 			</plugin>
 		</plugins>
 	</build>
