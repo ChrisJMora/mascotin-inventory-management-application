@@ -41,140 +41,73 @@ jobs:
       # ------------------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1  # Optimización: Solo clona el commit necesario
 
       # ------------------------------------------------------------------------
-      # PASO 2: CONFIGURAR ENTORNO DOCKER
+      # PASO 2: CONFIGURAR DOCKER Y COMPOSE
       # ------------------------------------------------------------------------
-      - name: Setup Docker environment
+      - name: Setup Docker
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          install: true  # Instala Docker CLI y componentes necesarios
-          version: latest  # Usa la versión más estable disponible
-          driver-opts: |
-            image=moby/buildkit:master  # Usa la imagen más reciente de BuildKit
+          version: v0.11.0  # Versión estable conocida
+          driver: docker-container
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.23.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
 
       # ------------------------------------------------------------------------
       # PASO 3: CONFIGURAR VARIABLES DE ENTORNO
       # ------------------------------------------------------------------------
-      - name: Configure environment variables
+      - name: Configure environment
         run: |
-          # Crear archivo .env con formato seguro
           {
             echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}"
             echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}"
             echo "MYSQL_USER=${{ secrets.MYSQL_USER }}"
             echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}"
           } > .env
-          
-          # Mostrar configuración (excluyendo valores sensibles)
-          echo "=== Configuración aplicada ==="
           grep -v 'PASSWORD' .env
 
       # ------------------------------------------------------------------------
-      # PASO 4: EJECUTAR DOCKER COMPOSE
+      # PASO 4: EJECUTAR Y VALIDAR SERVICIOS
       # ------------------------------------------------------------------------
-      - name: Start services with Docker Compose
+      - name: Run and validate services
         run: |
-          # Construir imágenes y levantar servicios
-          docker compose up -d --build --force-recreate
+          # Levantar servicios
+          docker-compose up -d --build
           
-          # Mostrar estado de los servicios
-          echo "=== Estado de los servicios ==="
-          docker compose ps -a
-          
-          # Mostrar logs iniciales para diagnóstico temprano
-          echo "=== Logs iniciales ==="
-          docker compose logs --tail=50
-
-      # ------------------------------------------------------------------------
-      # PASO 5: VALIDACIÓN DE SERVICIOS
-      # ------------------------------------------------------------------------
-      - name: Service validation
-        timeout-minutes: 10  # Límite de tiempo para validaciones
-        run: |
-          # ----------------------------------------------------------
-          # Validación de MySQL
-          # ----------------------------------------------------------
-          echo "⏳ Validando estado de MySQL..."
+          # Esperar MySQL
+          echo "Waiting for MySQL..."
           for i in {1..30}; do
-            if docker compose exec db mysqladmin ping \
-              -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" \
-              --silent; then
-              echo "✅ MySQL validation passed"
+            if docker-compose exec db mysqladmin ping -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" --silent; then
+              echo "MySQL ready"
               break
             fi
-            echo "Attempt $i/30 - MySQL not ready..."
-            sleep 5
-            if [ $i -eq 30 ]; then
-              echo "❌ MySQL validation failed"
-              docker compose logs db
-              exit 1
-            fi
+            sleep 2
+            [ $i -eq 30 ] && echo "MySQL timeout" && exit 1
           done
 
-          # ----------------------------------------------------------
-          # Validación de Base de Datos
-          # ----------------------------------------------------------
-          echo "⏳ Validando creación de base de datos..."
-          if ! docker compose exec db mysql \
-            -u "${{ secrets.MYSQL_USER }}" \
-            -p"${{ secrets.MYSQL_PASSWORD }}" \
-            -e "USE ${{ secrets.MYSQL_DATABASE }};"; then
-            echo "❌ Database validation failed"
-            docker compose exec db mysql -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "SHOW DATABASES;"
-            exit 1
-          fi
-          echo "✅ Database validation passed"
-
-          # ----------------------------------------------------------
-          # Validación de Aplicación
-          # ----------------------------------------------------------
-          echo "⏳ Validando aplicación..."
+          # Validar aplicación
+          echo "Validating application..."
           for i in {1..30}; do
-            HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
-              http://localhost:8080/health-check || true)
-          
-            if [ "$HTTP_STATUS" -eq 200 ]; then
-              echo "✅ Application validation passed (HTTP 200)"
-              break
+            if curl --fail --silent http://localhost:8080/; then
+              echo "App ready"
+              exit 0
             fi
-          
-            echo "Attempt $i/30 - Application returned HTTP $HTTP_STATUS..."
-            sleep 5
-            if [ $i -eq 30 ]; then
-              echo "❌ Application validation failed"
-              docker compose logs app
-              exit 1
-            fi
+            sleep 2
+            [ $i -eq 30 ] && echo "App timeout" && exit 1
           done
 
       # ------------------------------------------------------------------------
-      # PASO 6: DIAGNÓSTICO (SOLO EN FALLOS)
+      # PASO 5: LIMPIEZA
       # ------------------------------------------------------------------------
-      - name: Diagnostic information
-        if: failure()
+      - name: Cleanup
+        if: always()
         run: |
-          echo "=== FULL DIAGNOSTICS ==="
-          echo "1. Service status:"
-          docker compose ps -a
-          echo "\n2. Application logs:"
-          docker compose logs app
-          echo "\n3. Database logs:"
-          docker compose logs db
-          echo "\n4. Network connections:"
-          netstat -tuln
-          echo "\n5. Docker network inspection:"
-          docker network inspect $(docker compose ps -q | head -1 | xargs docker inspect --format='{{range .NetworkSettings.Networks}}{{.NetworkID}}{{end}}')
-
-      # ------------------------------------------------------------------------
-      # PASO 7: LIMPIEZA
-      # ------------------------------------------------------------------------
-      - name: Cleanup resources
-        if: always()  # Siempre ejecutar, incluso en fallos
-        run: |
-          echo "=== Cleaning up resources ==="
-          docker compose down -v --remove-orphans --rmi local
+          docker-compose down -v
           docker system prune -f
-          echo "✅ Cleanup completed"
