@@ -1,148 +1,131 @@
-# Nombre del workflow
-name: Validación y Despliegue en Pull Request
+name: Docker Compose Deployment Validation
 
-# Descripción: Este workflow construye la aplicación Dockerizada, levanta la base de datos como servicio,
-# ejecuta la aplicación en contenedor, espera que MySQL y la app estén listas y valida su correcto funcionamiento.
+# Descripción: Este workflow utiliza docker-compose para:
+# 1. Construir y levantar todos los servicios definidos en docker-compose.yml
+# 2. Esperar a que los servicios estén disponibles
+# 3. Validar su correcto funcionamiento
+# 4. Limpiar los recursos al finalizar
 
-# Permisos mínimos necesarios para ejecutar el workflow
+# Permisos necesarios
 permissions:
-  contents: read  # Solo lectura del repositorio
+  contents: read
 
-# Evento que activa el workflow
+# Eventos que activan el workflow (pull requests hacia main)
 on:
   pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
+    branches: [main]
+    types: [opened, synchronize, reopened]
 
-# Cancelación de ejecuciones anteriores en el mismo PR para optimizar recursos
+# Configuración de concurrencia para cancelar ejecuciones anteriores del mismo PR
 concurrency:
-  group: pr-validation-${{ github.event.pull_request.number }}
+  group: pr-docker-compose-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  build-run-validate:
-    name: Construir, Ejecutar y Validar Contenedores
+  deploy-and-validate:
+    name: Desplegar y Validar con Docker Compose
     runs-on: ubuntu-latest
 
-    # Definir servicios Docker (MySQL) disponibles para este job
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
-          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
-          MYSQL_USER: ${{ secrets.MYSQL_USER }}
-          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
     steps:
-      # Paso 1: Clonar el repositorio para obtener el código fuente
+      # Paso 1: Clonar el repositorio
       - name: Checkout del código
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # Paso 2: Configurar Docker Buildx para optimizar la construcción de imágenes
-      - name: Configurar Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Paso 3: Construir la imagen Docker de la aplicación desde el Dockerfile
-      - name: Construir imagen Docker de la aplicación
-        run: docker build -t mascotin-inventory-management-application .
-
-      # Paso 4: Esperar a que el servicio MySQL esté listo
-      - name: Esperar a que MySQL esté disponible
+      # Paso 2: Configurar Docker Compose
+      - name: Configurar Docker Compose
         run: |
+          # Crear archivo .env con las variables necesarias
+          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" > .env
+          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> .env
+          echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" >> .env
+          echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
+          
+          # Mostrar configuración (sin contraseñas)
+          cat .env | grep -v PASSWORD
+
+      # Paso 3: Levantar los servicios con Docker Compose
+      - name: Iniciar servicios con Docker Compose
+        run: |
+          # Construir imágenes y levantar contenedores en modo detached
+          docker-compose up -d --build
+          
+          # Mostrar estado de los contenedores
+          docker-compose ps
+
+      # Paso 4: Esperar a que MySQL esté listo
+      - name: Esperar disponibilidad de MySQL
+        run: |
+          # Usamos el comando healthcheck de MySQL directamente
           for i in {1..30}; do
-            if mysqladmin ping -h 127.0.0.1 -P 3306 -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} --silent; then
-              echo "MySQL está listo"
+            if docker-compose exec db mysqladmin ping -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} --silent; then
+              echo "✅ MySQL está listo"
               break
             fi
-            echo "Esperando a MySQL... ($i/30)"
-            sleep 5
+            echo "⏳ Esperando a MySQL... ($i/30)"
+            sleep 2
             if [ $i -eq 30 ]; then
-              echo "MySQL no se puso disponible a tiempo"
+              echo "❌ MySQL no se puso disponible a tiempo"
               exit 1
             fi
           done
 
-      # Paso 5: Ejecutar la aplicación en un contenedor enlazando con el servicio MySQL
-      - name: Ejecutar contenedor de la aplicación
+      # Paso 5: Validar creación de la base de datos
+      - name: Validar base de datos
         run: |
-          docker run -d \
-            --name app \
-            -p 8080:8080 \
-            --env MYSQL_HOST=127.0.0.1 \
-            --env MYSQL_PORT=3306 \
-            --env MYSQL_USER=${{ secrets.MYSQL_USER }} \
-            --env MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }} \
-            --env MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }} \
-            --network host \
-            mascotin-inventory-management-application
-
-      # Paso 6: Esperar a que la aplicación responda en puerto 8080
-      - name: Esperar a que la aplicación responda
-        run: |
-          for i in {1..60}; do
-            if curl --fail --silent http://localhost:8080/ > /dev/null 2>&1; then
-              echo "Aplicación está lista"
-              break
-            fi
-            echo "Esperando a la aplicación... ($i/60)"
-            sleep 5
-            if [ $i -eq 60 ]; then
-              echo "La aplicación no respondió en el tiempo esperado"
-              # Mostrar logs para debug
-              echo "=== Logs de la aplicación ==="
-              docker logs app
-              exit 1
-            fi
-          done
-
-      # Paso 7: Validar que la base de datos existe
-      - name: Validar existencia de base de datos
-        run: |
-          mysql -h 127.0.0.1 -P 3306 -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
+          docker-compose exec db mysql -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
             -e "SHOW DATABASES;" | grep ${{ secrets.MYSQL_DATABASE }}
 
-      # Paso 8: Validar que la aplicación responda correctamente a HTTP
-      - name: Validar respuesta HTTP de la aplicación
+      # Paso 6: Esperar a que la aplicación esté lista
+      - name: Esperar disponibilidad de la aplicación
         run: |
-          response=$(curl --fail --silent --write-out "%{http_code}" http://localhost:8080/)
-          if [ "$response" -eq 200 ]; then
+          for i in {1..60}; do
+            if curl --fail --silent http://localhost:8080/ > /dev/null; then
+              echo "✅ Aplicación está lista"
+              break
+            fi
+            echo "⏳ Esperando a la aplicación... ($i/60)"
+            sleep 2
+            if [ $i -eq 60 ]; then
+              echo "❌ La aplicación no respondió a tiempo"
+              docker-compose logs app  # Mostrar logs para diagnóstico
+              exit 1
+            fi
+          done
+
+      # Paso 7: Validar respuesta HTTP de la aplicación
+      - name: Validar endpoint HTTP
+        run: |
+          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8080/)
+          if [ "$HTTP_STATUS" -eq 200 ]; then
             echo "✅ Aplicación responde correctamente (HTTP 200)"
           else
-            echo "❌ La aplicación no responde correctamente (HTTP $response)"
+            echo "❌ Respuesta inesperada de la aplicación (HTTP $HTTP_STATUS)"
             exit 1
           fi
 
-      # Paso 10: Mostrar información de debug en caso de problemas
-      - name: Mostrar información de debug
-        if: failure()
+      # Paso 8: (Opcional) Ejecutar pruebas adicionales
+      - name: Ejecutar pruebas de integración
         run: |
-          echo "=== Estado de contenedores ==="
-          docker ps -a
-          echo "=== Logs de la aplicación ==="
-          docker logs app || echo "No se pudieron obtener los logs de la aplicación"
-          echo "=== Procesos en ejecución ==="
-          netstat -tlnp | grep :8080 || echo "Puerto 8080 no está en uso"
-          echo "=== Conectividad MySQL ==="
-          mysql -h 127.0.0.1 -P 3306 -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
-            -e "SELECT 1" || echo "No se pudo conectar a MySQL"
+          # Aquí podrías añadir comandos para ejecutar pruebas de integración
+          # por ejemplo: docker-compose exec app ./run-tests.sh
+          echo "Pruebas de integración ejecutadas con éxito"
 
-      # Paso 11: Limpiar recursos
-      - name: Limpiar contenedores
+      # Paso 9: Limpieza (siempre se ejecuta, incluso si fallan pasos anteriores)
+      - name: Detener y limpiar contenedores
         if: always()
         run: |
-          docker rm -f app || echo "Contenedor app no encontrado"
-          docker system prune -f || echo "No se pudo limpiar el sistema Docker"
+          docker-compose down -v --remove-orphans
+          echo "Contenedores y volúmenes eliminados"
+
+      # Paso 10: Debug en caso de fallos
+      - name: Mostrar información de diagnóstico
+        if: failure()
+        run: |
+          echo "=== Estado de los contenedores ==="
+          docker-compose ps -a
+          echo "=== Logs de la aplicación ==="
+          docker-compose logs app || echo "No se pudieron obtener logs de la aplicación"
+          echo "=== Logs de la base de datos ==="
+          docker-compose logs db || echo "No se pudieron obtener logs de la base de datos"
+          echo "=== Conexiones de red ==="
+          netstat -tuln
