@@ -42,7 +42,6 @@ jobs:
           echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
           echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> .env
           echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> .env
-          echo "MYSQL_HOST=db" >> .env
 
       # Paso 4: Construir imágenes Docker de los servicios definidos en docker-compose.yml
       - name: Construir imágenes Docker
