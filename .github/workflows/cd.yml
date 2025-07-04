@@ -90,6 +90,10 @@ jobs:
       - name: Listar contenedores activos
         run: docker ps
 
+      # Mostrar los logs de la aplicación para debug
+      - name: Mostrar logs de la aplicación
+        run: docker logs $(docker ps -qf "name=app")
+
       # Validar que la aplicación responde HTTP correctamente
       - name: Validar respuesta HTTP de la aplicación
         run: |
