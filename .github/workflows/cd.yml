@@ -1,131 +1,180 @@
-name: Docker Compose Deployment Validation
+name: Docker Compose Deployment Pipeline
 
-# Descripción: Este workflow utiliza docker-compose para:
-# 1. Construir y levantar todos los servicios definidos en docker-compose.yml
-# 2. Esperar a que los servicios estén disponibles
-# 3. Validar su correcto funcionamiento
-# 4. Limpiar los recursos al finalizar
+################################################################################
+# DESCRIPCIÓN COMPLETA DEL WORKFLOW
+#
+# Este workflow automatiza el proceso de:
+# 1. Construcción de imágenes Docker según docker-compose.yml
+# 2. Despliegue de múltiples servicios interconectados
+# 3. Validación del estado y funcionalidad de los servicios
+# 4. Limpieza de recursos post-ejecución
+#
+# Flujo de ejecución:
+# - Se activa en eventos de pull request hacia main
+# - Configura el entorno Docker con Buildx (incluye Docker Compose)
+# - Levanta los servicios definidos en docker-compose.yml
+# - Realiza validaciones secuenciales:
+#   * Disponibilidad de MySQL
+#   * Creación de la base de datos
+#   * Respuesta HTTP de la aplicación
+# - Proporciona herramientas de diagnóstico en caso de fallos
+# - Limpia recursos independientemente del resultado
+################################################################################
 
-# Permisos necesarios
-permissions:
-  contents: read
-
-# Eventos que activan el workflow (pull requests hacia main)
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
 
-# Configuración de concurrencia para cancelar ejecuciones anteriores del mismo PR
 concurrency:
-  group: pr-docker-compose-${{ github.event.pull_request.number }}
+  group: pr-docker-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  deploy-and-validate:
-    name: Desplegar y Validar con Docker Compose
+  docker-compose-deployment:
+    name: Docker Compose Deployment
     runs-on: ubuntu-latest
 
     steps:
-      # Paso 1: Clonar el repositorio
-      - name: Checkout del código
+      # ------------------------------------------------------------------------
+      # PASO 1: OBTENER CÓDIGO FUENTE
+      # ------------------------------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # Optimización: Solo clona el commit necesario
 
-      # Paso 2: Configurar Docker Compose
-      - name: Configurar Docker Compose
+      # ------------------------------------------------------------------------
+      # PASO 2: CONFIGURAR ENTORNO DOCKER
+      # ------------------------------------------------------------------------
+      - name: Setup Docker environment
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true  # Instala Docker CLI y componentes necesarios
+          version: latest  # Usa la versión más estable disponible
+          driver-opts: |
+            image=moby/buildkit:master  # Usa la imagen más reciente de BuildKit
+
+      # ------------------------------------------------------------------------
+      # PASO 3: CONFIGURAR VARIABLES DE ENTORNO
+      # ------------------------------------------------------------------------
+      - name: Configure environment variables
         run: |
-          # Crear archivo .env con las variables necesarias
-          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" > .env
-          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> .env
-          echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" >> .env
-          echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
+          # Crear archivo .env con formato seguro
+          {
+            echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}"
+            echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}"
+            echo "MYSQL_USER=${{ secrets.MYSQL_USER }}"
+            echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}"
+          } > .env
           
-          # Mostrar configuración (sin contraseñas)
-          cat .env | grep -v PASSWORD
+          # Mostrar configuración (excluyendo valores sensibles)
+          echo "=== Configuración aplicada ==="
+          grep -v 'PASSWORD' .env
 
-      # Paso 3: Levantar los servicios con Docker Compose
-      - name: Iniciar servicios con Docker Compose
+      # ------------------------------------------------------------------------
+      # PASO 4: EJECUTAR DOCKER COMPOSE
+      # ------------------------------------------------------------------------
+      - name: Start services with Docker Compose
         run: |
-          # Construir imágenes y levantar contenedores en modo detached
-          docker-compose up -d --build
+          # Construir imágenes y levantar servicios
+          docker compose up -d --build --force-recreate
           
-          # Mostrar estado de los contenedores
-          docker-compose ps
+          # Mostrar estado de los servicios
+          echo "=== Estado de los servicios ==="
+          docker compose ps -a
+          
+          # Mostrar logs iniciales para diagnóstico temprano
+          echo "=== Logs iniciales ==="
+          docker compose logs --tail=50
 
-      # Paso 4: Esperar a que MySQL esté listo
-      - name: Esperar disponibilidad de MySQL
+      # ------------------------------------------------------------------------
+      # PASO 5: VALIDACIÓN DE SERVICIOS
+      # ------------------------------------------------------------------------
+      - name: Service validation
+        timeout-minutes: 10  # Límite de tiempo para validaciones
         run: |
-          # Usamos el comando healthcheck de MySQL directamente
+          # ----------------------------------------------------------
+          # Validación de MySQL
+          # ----------------------------------------------------------
+          echo "⏳ Validando estado de MySQL..."
           for i in {1..30}; do
-            if docker-compose exec db mysqladmin ping -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} --silent; then
-              echo "✅ MySQL está listo"
+            if docker compose exec db mysqladmin ping \
+              -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" \
+              --silent; then
+              echo "✅ MySQL validation passed"
               break
             fi
-            echo "⏳ Esperando a MySQL... ($i/30)"
-            sleep 2
+            echo "Attempt $i/30 - MySQL not ready..."
+            sleep 5
             if [ $i -eq 30 ]; then
-              echo "❌ MySQL no se puso disponible a tiempo"
+              echo "❌ MySQL validation failed"
+              docker compose logs db
               exit 1
             fi
           done
 
-      # Paso 5: Validar creación de la base de datos
-      - name: Validar base de datos
-        run: |
-          docker-compose exec db mysql -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
-            -e "SHOW DATABASES;" | grep ${{ secrets.MYSQL_DATABASE }}
-
-      # Paso 6: Esperar a que la aplicación esté lista
-      - name: Esperar disponibilidad de la aplicación
-        run: |
-          for i in {1..60}; do
-            if curl --fail --silent http://localhost:8080/ > /dev/null; then
-              echo "✅ Aplicación está lista"
-              break
-            fi
-            echo "⏳ Esperando a la aplicación... ($i/60)"
-            sleep 2
-            if [ $i -eq 60 ]; then
-              echo "❌ La aplicación no respondió a tiempo"
-              docker-compose logs app  # Mostrar logs para diagnóstico
-              exit 1
-            fi
-          done
-
-      # Paso 7: Validar respuesta HTTP de la aplicación
-      - name: Validar endpoint HTTP
-        run: |
-          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8080/)
-          if [ "$HTTP_STATUS" -eq 200 ]; then
-            echo "✅ Aplicación responde correctamente (HTTP 200)"
-          else
-            echo "❌ Respuesta inesperada de la aplicación (HTTP $HTTP_STATUS)"
+          # ----------------------------------------------------------
+          # Validación de Base de Datos
+          # ----------------------------------------------------------
+          echo "⏳ Validando creación de base de datos..."
+          if ! docker compose exec db mysql \
+            -u "${{ secrets.MYSQL_USER }}" \
+            -p"${{ secrets.MYSQL_PASSWORD }}" \
+            -e "USE ${{ secrets.MYSQL_DATABASE }};"; then
+            echo "❌ Database validation failed"
+            docker compose exec db mysql -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "SHOW DATABASES;"
             exit 1
           fi
+          echo "✅ Database validation passed"
 
-      # Paso 8: (Opcional) Ejecutar pruebas adicionales
-      - name: Ejecutar pruebas de integración
-        run: |
-          # Aquí podrías añadir comandos para ejecutar pruebas de integración
-          # por ejemplo: docker-compose exec app ./run-tests.sh
-          echo "Pruebas de integración ejecutadas con éxito"
+          # ----------------------------------------------------------
+          # Validación de Aplicación
+          # ----------------------------------------------------------
+          echo "⏳ Validando aplicación..."
+          for i in {1..30}; do
+            HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
+              http://localhost:8080/health-check || true)
+          
+            if [ "$HTTP_STATUS" -eq 200 ]; then
+              echo "✅ Application validation passed (HTTP 200)"
+              break
+            fi
+          
+            echo "Attempt $i/30 - Application returned HTTP $HTTP_STATUS..."
+            sleep 5
+            if [ $i -eq 30 ]; then
+              echo "❌ Application validation failed"
+              docker compose logs app
+              exit 1
+            fi
+          done
 
-      # Paso 9: Limpieza (siempre se ejecuta, incluso si fallan pasos anteriores)
-      - name: Detener y limpiar contenedores
-        if: always()
-        run: |
-          docker-compose down -v --remove-orphans
-          echo "Contenedores y volúmenes eliminados"
-
-      # Paso 10: Debug en caso de fallos
-      - name: Mostrar información de diagnóstico
+      # ------------------------------------------------------------------------
+      # PASO 6: DIAGNÓSTICO (SOLO EN FALLOS)
+      # ------------------------------------------------------------------------
+      - name: Diagnostic information
         if: failure()
         run: |
-          echo "=== Estado de los contenedores ==="
-          docker-compose ps -a
-          echo "=== Logs de la aplicación ==="
-          docker-compose logs app || echo "No se pudieron obtener logs de la aplicación"
-          echo "=== Logs de la base de datos ==="
-          docker-compose logs db || echo "No se pudieron obtener logs de la base de datos"
-          echo "=== Conexiones de red ==="
+          echo "=== FULL DIAGNOSTICS ==="
+          echo "1. Service status:"
+          docker compose ps -a
+          echo "\n2. Application logs:"
+          docker compose logs app
+          echo "\n3. Database logs:"
+          docker compose logs db
+          echo "\n4. Network connections:"
           netstat -tuln
+          echo "\n5. Docker network inspection:"
+          docker network inspect $(docker compose ps -q | head -1 | xargs docker inspect --format='{{range .NetworkSettings.Networks}}{{.NetworkID}}{{end}}')
+
+      # ------------------------------------------------------------------------
+      # PASO 7: LIMPIEZA
+      # ------------------------------------------------------------------------
+      - name: Cleanup resources
+        if: always()  # Siempre ejecutar, incluso en fallos
+        run: |
+          echo "=== Cleaning up resources ==="
+          docker compose down -v --remove-orphans --rmi local
+          docker system prune -f
+          echo "✅ Cleanup completed"
