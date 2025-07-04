@@ -30,7 +30,7 @@ jobs:
 
     # Definir servicios Docker (MySQL) disponibles para este job
     services:
-      db:
+      mysql:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
@@ -60,62 +60,89 @@ jobs:
       - name: Construir imagen Docker de la aplicación
         run: docker build -t mascotin-inventory-management-application .
 
-      # Paso 4: Ejecutar la aplicación en un contenedor enlazando con el servicio MySQL
+      # Paso 4: Esperar a que el servicio MySQL esté listo
+      - name: Esperar a que MySQL esté disponible
+        run: |
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} --silent; then
+              echo "MySQL está listo"
+              break
+            fi
+            echo "Esperando a MySQL... ($i/30)"
+            sleep 5
+            if [ $i -eq 30 ]; then
+              echo "MySQL no se puso disponible a tiempo"
+              exit 1
+            fi
+          done
+
+      # Paso 5: Ejecutar la aplicación en un contenedor enlazando con el servicio MySQL
       - name: Ejecutar contenedor de la aplicación
         run: |
           docker run -d \
             --name app \
             -p 8080:8080 \
-            --env MYSQL_HOST=db \
+            --env MYSQL_HOST=127.0.0.1 \
+            --env MYSQL_PORT=3306 \
             --env MYSQL_USER=${{ secrets.MYSQL_USER }} \
             --env MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }} \
             --env MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }} \
             --network host \
             mascotin-inventory-management-application
 
-      # Paso 5: Esperar a que el servicio MySQL esté listo mediante healthcheck
-      - name: Esperar a que MySQL esté saludable
-        run: |
-          for i in {1..30}; do
-            STATUS=$(docker inspect --format='{{json .State.Health.Status}}' $(docker ps -qf "name=db") || echo "\"unhealthy\"")
-            if [[ "$STATUS" == "\"healthy\"" ]]; then
-              echo "MySQL está listo"
-              exit 0
-            fi
-            echo "Esperando a MySQL... ($i)"
-            sleep 5
-          done
-          echo "MySQL no se puso saludable a tiempo"
-          exit 1
-
       # Paso 6: Esperar a que la aplicación responda en puerto 8080
       - name: Esperar a que la aplicación responda
         run: |
-          for i in {1..30}; do
-            if curl --fail http://localhost:8080/health; then
+          for i in {1..60}; do
+            if curl --fail --silent http://localhost:8080/ > /dev/null 2>&1; then
               echo "Aplicación está lista"
-              exit 0
+              break
             fi
-            echo "Esperando a la aplicación... ($i)"
+            echo "Esperando a la aplicación... ($i/60)"
             sleep 5
+            if [ $i -eq 60 ]; then
+              echo "La aplicación no respondió en el tiempo esperado"
+              # Mostrar logs para debug
+              echo "=== Logs de la aplicación ==="
+              docker logs app
+              exit 1
+            fi
           done
-          echo "La aplicación no respondió en el tiempo esperado"
-          exit 1
 
-      # Paso 7: Validar que la base de datos existe dentro del contenedor MySQL
+      # Paso 7: Validar que la base de datos existe
       - name: Validar existencia de base de datos
         run: |
-          docker exec $(docker ps -qf "name=db") \
-            mysql -u${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
+          mysql -h 127.0.0.1 -P 3306 -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
             -e "SHOW DATABASES;" | grep ${{ secrets.MYSQL_DATABASE }}
 
       # Paso 8: Validar que la aplicación responda correctamente a HTTP
       - name: Validar respuesta HTTP de la aplicación
         run: |
-          curl --fail http://localhost:8080 || (echo "La aplicación no responde correctamente" && exit 1)
+          response=$(curl --fail --silent --write-out "%{http_code}" http://localhost:8080/)
+          if [ "$response" -eq 200 ]; then
+            echo "✅ Aplicación responde correctamente (HTTP 200)"
+          else
+            echo "❌ La aplicación no responde correctamente (HTTP $response)"
+            exit 1
+          fi
 
-      # Paso 9: Apagar contenedores para limpiar el ambiente
-      - name: Apagar contenedor de la aplicación
+      # Paso 10: Mostrar información de debug en caso de problemas
+      - name: Mostrar información de debug
+        if: failure()
+        run: |
+          echo "=== Estado de contenedores ==="
+          docker ps -a
+          echo "=== Logs de la aplicación ==="
+          docker logs app || echo "No se pudieron obtener los logs de la aplicación"
+          echo "=== Procesos en ejecución ==="
+          netstat -tlnp | grep :8080 || echo "Puerto 8080 no está en uso"
+          echo "=== Conectividad MySQL ==="
+          mysql -h 127.0.0.1 -P 3306 -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
+            -e "SELECT 1" || echo "No se pudo conectar a MySQL"
+
+      # Paso 11: Limpiar recursos
+      - name: Limpiar contenedores
         if: always()
         run: |
-          docker rm -f app
+          docker rm -f app || echo "Contenedor app no encontrado"
+          docker system prune -f || echo "No se pudo limpiar el sistema Docker"
