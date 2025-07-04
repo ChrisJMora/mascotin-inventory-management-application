@@ -67,7 +67,9 @@ jobs:
               echo "✅ MySQL is responsive"
           
               echo "\n=== MySQL Databases List ==="
-              docker-compose exec db mysql -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "SHOW DATABASES;"
+              if ! docker-compose exec db mysql -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "SHOW DATABASES;"; then
+              echo "⚠️ Failed to list databases with root. Proceeding with caution."
+              fi
           
               exit 0
             fi
@@ -86,7 +88,7 @@ jobs:
           echo "=== Validating Database ==="
           if docker-compose exec db mysql \
             -u "${{ secrets.MYSQL_USER }}" \
-            -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" \
+            -p"${{ secrets.MYSQL_PASSWORD }}" \
             -e "USE ${{ secrets.MYSQL_DATABASE }}; SELECT 1;"; then
             echo "✅ Database exists and is accessible"
           else
