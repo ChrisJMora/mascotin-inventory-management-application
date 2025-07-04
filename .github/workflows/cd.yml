@@ -1,11 +1,14 @@
 # Nombre del workflow
 name: Validación y Despliegue en Pull Request
 
-# Permisos mínimos necesarios
+# Descripción: Este workflow construye la aplicación Dockerizada, levanta la base de datos como servicio,
+# ejecuta la aplicación en contenedor, espera que MySQL y la app estén listas y valida su correcto funcionamiento.
+
+# Permisos mínimos necesarios para ejecutar el workflow
 permissions:
   contents: read  # Solo lectura del repositorio
 
-# Evento que activa este workflow
+# Evento que activa el workflow
 on:
   pull_request:
     branches:
@@ -15,109 +18,104 @@ on:
       - synchronize
       - reopened
 
-# Evita ejecuciones paralelas innecesarias en el mismo Pull Request
+# Cancelación de ejecuciones anteriores en el mismo PR para optimizar recursos
 concurrency:
-  group: pr-${{ github.event.pull_request.number }}
+  group: pr-validation-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-
-  build-containers:
-    name: Creación de Contenedores Docker
+  build-run-validate:
+    name: Construir, Ejecutar y Validar Contenedores
     runs-on: ubuntu-latest
 
-    steps:
-      # Clonar el repositorio
-      - name: Clonar el repositorio
-        uses: actions/checkout@v4
+    # Definir servicios Docker (MySQL) disponibles para este job
+    services:
+      db:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
-      # Configurar Docker Buildx para compilación avanzada
+    steps:
+      # Paso 1: Clonar el repositorio para obtener el código fuente
+      - name: Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Paso 2: Configurar Docker Buildx para optimizar la construcción de imágenes
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Crear archivo .env con las variables necesarias
-      - name: Crear archivo .env
+      # Paso 3: Construir la imagen Docker de la aplicación desde el Dockerfile
+      - name: Construir imagen Docker de la aplicación
+        run: docker build -t mascotin-inventory-management-application .
+
+      # Paso 4: Ejecutar la aplicación en un contenedor enlazando con el servicio MySQL
+      - name: Ejecutar contenedor de la aplicación
         run: |
-          echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" > .env
-          echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
-          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> .env
-          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> .env
+          docker run -d \
+            --name app \
+            -p 8080:8080 \
+            --env MYSQL_HOST=db \
+            --env MYSQL_USER=${{ secrets.MYSQL_USER }} \
+            --env MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }} \
+            --env MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }} \
+            --network host \
+            mascotin-inventory-management-application
 
-      # Construir imágenes Docker definidas en docker-compose.yml
-      - name: Construir imágenes Docker
-        run: docker compose build
-
-  run-containers:
-    name: Levantar contenedores en segundo plano
-    runs-on: ubuntu-latest
-    needs: build-containers
-
-    steps:
-      # Clonar el repositorio nuevamente
-      - name: Clonar el repositorio
-        uses: actions/checkout@v4
-
-      # Crear archivo .env con variables necesarias (incluyendo MYSQL_HOST)
-      - name: Crear archivo .env
+      # Paso 5: Esperar a que el servicio MySQL esté listo mediante healthcheck
+      - name: Esperar a que MySQL esté saludable
         run: |
-          echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" > .env
-          echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
-          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> .env
-          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> .env
-          echo "MYSQL_HOST=db" >> .env
+          for i in {1..30}; do
+            STATUS=$(docker inspect --format='{{json .State.Health.Status}}' $(docker ps -qf "name=db") || echo "\"unhealthy\"")
+            if [[ "$STATUS" == "\"healthy\"" ]]; then
+              echo "MySQL está listo"
+              exit 0
+            fi
+            echo "Esperando a MySQL... ($i)"
+            sleep 5
+          done
+          echo "MySQL no se puso saludable a tiempo"
+          exit 1
 
-      # Descargar script wait-for-it para posibles esperas si quieres
-      - name: Descargar script wait-for-it
-        run: |
-          curl -o wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh
-          chmod +x wait-for-it.sh
-
-      # Levantar contenedores en modo detached
-      - name: Levantar contenedores con Docker Compose
-        run: docker compose up -d
-
-  validate-services:
-    name: Validación y Espera Activa de Servicios
-    runs-on: ubuntu-latest
-    needs: run-containers
-
-    steps:
-      # Mostrar contenedores activos para diagnóstico
-      - name: Listar contenedores activos
-        run: docker ps
-
-      # Esperar activamente a que la aplicación responda en localhost:8080
-      - name: Esperar a que la aplicación esté disponible en puerto 8080
+      # Paso 6: Esperar a que la aplicación responda en puerto 8080
+      - name: Esperar a que la aplicación responda
         run: |
           for i in {1..30}; do
             if curl --fail http://localhost:8080/health; then
-              echo "Aplicación lista y responde"
+              echo "Aplicación está lista"
               exit 0
             fi
-            echo "Esperando aplicación... intento $i"
+            echo "Esperando a la aplicación... ($i)"
             sleep 5
           done
-          echo "Error: la aplicación no respondió a tiempo"
+          echo "La aplicación no respondió en el tiempo esperado"
           exit 1
 
-      # Mostrar logs de la aplicación para depuración si falla
-      - name: Mostrar logs de la aplicación
-        if: failure()
-        run: docker logs $(docker ps -qf "name=mascotin-inventory-management-application-app")
-
-      # Mostrar logs de MySQL para depuración
-      - name: Mostrar logs de MySQL
-        if: failure()
-        run: docker logs $(docker ps -qf "name=mascotin-inventory-management-application-db")
-
-      # Validar que la base de datos existe dentro del contenedor db
-      - name: Verificar existencia de base de datos
+      # Paso 7: Validar que la base de datos existe dentro del contenedor MySQL
+      - name: Validar existencia de base de datos
         run: |
-          docker exec $(docker ps -qf "name=mascotin-inventory-management-application-db") \
+          docker exec $(docker ps -qf "name=db") \
             mysql -u${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
             -e "SHOW DATABASES;" | grep ${{ secrets.MYSQL_DATABASE }}
 
-      # Apagar contenedores siempre al finalizar las validaciones
-      - name: Apagar contenedores
+      # Paso 8: Validar que la aplicación responda correctamente a HTTP
+      - name: Validar respuesta HTTP de la aplicación
+        run: |
+          curl --fail http://localhost:8080 || (echo "La aplicación no responde correctamente" && exit 1)
+
+      # Paso 9: Apagar contenedores para limpiar el ambiente
+      - name: Apagar contenedor de la aplicación
         if: always()
-        run: docker compose down
+        run: |
+          docker rm -f app
