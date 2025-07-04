@@ -1,0 +1,108 @@
+# Nombre del workflow
+name: Validación y Despliegue en Pull Request
+
+# Permisos mínimos necesarios
+permissions:
+  contents: read  # Solo lectura del repositorio
+
+# Evento que activa este workflow
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+# Evita ejecuciones paralelas innecesarias en el mismo Pull Request
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+
+  build-containers:
+    name: Creación de Contenedores Docker
+    runs-on: ubuntu-latest
+
+    steps:
+      # Paso 1: Clonar el repositorio
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      # Paso 2: Configurar Docker Buildx para compilación avanzada
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Paso 3: Crear archivo .env con las variables necesarias para el entorno de ejecución
+      - name: Crear archivo .env
+        run: |
+          echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" > .env
+          echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
+          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> .env
+          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> .env
+
+      # Paso 4: Construir imágenes Docker de los servicios definidos en docker-compose.yml
+      - name: Construir imágenes Docker
+        run: docker compose build
+
+  run-containers:
+    name: Ejecución de Contenedores Docker
+    runs-on: ubuntu-latest
+    needs: build-containers  # Este job depende de que el build se haya completado
+
+    steps:
+      # Paso 1: Clonar el repositorio nuevamente en este job
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      # Paso 2: Crear archivo .env con las mismas variables del job anterior
+      - name: Crear archivo .env
+        run: |
+          echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" > .env
+          echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
+          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> .env
+          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> .env
+          echo "MYSQL_HOST=db" >> .env
+
+      # Paso 3: Descargar el script wait-for-it.sh para esperar a que los servicios estén disponibles
+      - name: Descargar script wait-for-it
+        run: |
+          curl -o wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh
+          chmod +x wait-for-it.sh
+
+      # Paso 4: Levantar contenedores en segundo plano con docker compose
+      - name: Iniciar contenedores con Docker Compose
+        run: docker compose up -d
+
+      # Paso 5: Esperar a que MySQL esté disponible en el puerto 3306
+      - name: Esperar a MySQL
+        run: ./wait-for-it.sh db:3306 --timeout=60 --strict -- echo "MySQL disponible"
+
+      # Paso 6: Esperar a que la aplicación web esté disponible en el puerto 8080
+      - name: Esperar a la Aplicación
+        run: ./wait-for-it.sh localhost:8080 --timeout=90 --strict -- echo "Aplicación disponible"
+
+  validate-services:
+    name: Validación de Servicios en Ejecución
+    runs-on: ubuntu-latest
+    needs: run-containers  # Este job se ejecuta después de levantar los contenedores
+
+    steps:
+      # Paso 1: Verificar que la aplicación responda correctamente
+      - name: Validar respuesta HTTP de la aplicación
+        run: |
+          curl --fail http://localhost:8080 || (echo "La aplicación no responde correctamente" && exit 1)
+
+      # Paso 2: Verificar que la base de datos fue creada correctamente
+      - name: Verificar existencia de base de datos
+        run: |
+          docker exec $(docker ps -qf "name=db") \
+            mysql -u${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
+            -e "SHOW DATABASES;" | grep ${{ secrets.MYSQL_DATABASE }}
+
+      # Paso 3: Apagar los contenedores luego de las validaciones
+      - name: Apagar contenedores
+        if: always()  # Este paso se ejecuta siempre, incluso si una validación falla
+        run: docker compose down
