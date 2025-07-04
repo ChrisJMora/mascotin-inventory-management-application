@@ -18,9 +18,6 @@ FROM tomcat:9.0-jdk21-temurin AS runtime
 # Establecer variables de entorno
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:+UseStringDeduplication"
 
-# Instalar dumb-init y utilidades necesarias
-RUN apt-get update && apt-get install -y dumb-init curl netcat
-
 # Limpiar aplicaciones por defecto de Tomcat
 RUN rm -rf /usr/local/tomcat/webapps/*
 
@@ -42,5 +39,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 EXPOSE 8080
 
 # Configurar el ENTRYPOINT y CMD para esperar a MySQL antes de iniciar Tomcat
-ENTRYPOINT ["dumb-init", "--"]
 CMD ["wait-for-it", "db:3306", "--", "catalina.sh", "run"]
