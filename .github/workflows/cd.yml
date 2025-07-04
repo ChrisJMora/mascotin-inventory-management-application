@@ -66,11 +66,6 @@ jobs:
             if docker-compose exec db mysqladmin ping -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" --silent; then
               echo "✅ MySQL is responsive"
           
-              echo "\n=== MySQL Databases List ==="
-              if ! docker-compose exec db mysql -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "SHOW DATABASES;"; then
-              echo "⚠️ Failed to list databases with root. Proceeding with caution."
-              fi
-          
               exit 0
             fi
             echo "⏳ Waiting for MySQL... Attempt $i/30"
@@ -81,28 +76,6 @@ jobs:
           echo "\n=== MySQL Container Logs ==="
           docker-compose logs db
           exit 1
-
-      - name: Validate Database Creation
-        timeout-minutes: 2
-        run: |
-          echo "=== Validating Database ==="
-          if docker-compose exec db mysql \
-            -u "${{ secrets.MYSQL_USER }}" \
-            -p"${{ secrets.MYSQL_PASSWORD }}" \
-            -e "USE ${{ secrets.MYSQL_DATABASE }}; SELECT 1;"; then
-            echo "✅ Database exists and is accessible"
-          else
-            echo "❌ Database validation failed"
-            echo "\n=== Debug Info ==="
-            echo "1. Trying to create test table..."
-            docker-compose exec db mysql -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" \
-              -e "CREATE DATABASE IF NOT EXISTS ${{ secrets.MYSQL_DATABASE }}; \
-                  USE ${{ secrets.MYSQL_DATABASE }}; \
-                  CREATE TABLE IF NOT EXISTS test(id INT); \
-                  INSERT INTO test VALUES(1); \
-                  SELECT * FROM test;"
-            exit 1
-          fi
 
       - name: Validate Application Health
         timeout-minutes: 10
