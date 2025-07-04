@@ -86,7 +86,7 @@ jobs:
           echo "=== Validating Database ==="
           if docker-compose exec db mysql \
             -u "${{ secrets.MYSQL_USER }}" \
-            -p"${{ secrets.MYSQL_PASSWORD }}" \
+            -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" \
             -e "USE ${{ secrets.MYSQL_DATABASE }}; SELECT 1;"; then
             echo "✅ Database exists and is accessible"
           else
