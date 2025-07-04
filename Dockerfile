@@ -1,52 +1,43 @@
-# Etapa 1: Compilar la aplicación
+# Etapa 1: Compilar la aplicación con Maven
 FROM maven:3.9.6-eclipse-temurin-21 AS builder
 
 WORKDIR /app
+
+# Copiar el descriptor del proyecto y preparar dependencias
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
+
+# Copiar el código fuente y compilar el WAR en modo producción
 COPY src ./src
 RUN mvn clean package -Pprod -B --no-transfer-progress
 
-# Etapa 2: Imagen final de ejecución
-FROM eclipse-temurin:21-jre-alpine AS runtime
 
-# Instalar herramientas necesarias
-RUN apk add --no-cache dumb-init curl netcat-openbsd
+# Etapa 2: Imagen final de ejecución basada en Tomcat oficial
+FROM tomcat:9.0-jdk21-temurin AS runtime
 
-# Variables Tomcat
-ENV TOMCAT_VERSION=9.0.85
-ENV CATALINA_HOME=/opt/tomcat
-ENV PATH=$CATALINA_HOME/bin:$PATH
-WORKDIR $CATALINA_HOME
+# Establecer variables de entorno
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:+UseStringDeduplication"
 
-# Instalar Tomcat
-RUN wget -q https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz \
-    && tar -xzf apache-tomcat-${TOMCAT_VERSION}.tar.gz --strip-components=1 \
-    && rm apache-tomcat-${TOMCAT_VERSION}.tar.gz \
-    && rm -rf webapps/*
+# Limpiar aplicaciones por defecto de Tomcat
+RUN rm -rf /usr/local/tomcat/webapps/*
 
-# Habilitar resolución de variables de entorno en Tomcat
-RUN echo "org.apache.tomcat.util.digester.PROPERTY_SOURCE=org.apache.tomcat.util.digester.EnvironmentPropertySource" >> conf/catalina.properties
+# Copiar el WAR generado desde la etapa de construcción
+COPY --from=builder /app/target/inventorymanagementapplication.war /usr/local/tomcat/webapps/ROOT.war
 
-# Copiar WAR y configuración
-COPY --from=builder /app/target/inventorymanagementapplication.war webapps/ROOT.war
-COPY context-prod.xml conf/context.xml
+# Copiar archivo de configuración específico para producción
+COPY context-prod.xml /usr/local/tomcat/conf/context.xml
 
-# Copiar wait-for-it.sh
-RUN apk add --no-cache dumb-init curl netcat-openbsd bash
+# Copiar el script wait-for-it para espera activa
 COPY wait-for-it.sh /usr/local/bin/wait-for-it
 RUN chmod +x /usr/local/bin/wait-for-it
 
-# Configurar logging y memoria
-ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:+UseStringDeduplication"
-ENV CATALINA_OPTS="-Djava.util.logging.config.file=$CATALINA_HOME/conf/logging.properties"
-
-# Healthcheck
+# Healthcheck para validar la disponibilidad de la aplicación
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
+  CMD curl -f http://localhost:8080/ || exit 1
 
+# Exponer el puerto HTTP de Tomcat
 EXPOSE 8080
 
-# Ejecutar con espera activa a la DB
+# Configurar el ENTRYPOINT y CMD para esperar a MySQL antes de iniciar Tomcat
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["wait-for-it", "db:3306", "--", "catalina.sh", "run"]
