@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Context>
+
+    <JarScanner scanClassPath="false" />
+    <CookieProcessor sameSiteCookies="lax" /> <!-- To be compliant with OWASP -->
+
+    <!-- MySQL  -->
+    <Resource name="jdbc/inventorymanagementapplicationDS" auth="Container" type="javax.sql.DataSource"
+              maxTotal="20" maxIdle="5" maxWaitMillis="10000"
+              username="${MYSQL_USER}" password="${MYSQL_PASSWORD}"
+              driverClassName="com.mysql.cj.jdbc.Driver"
+              url="jdbc:mysql://${MYSQL_HOST}:3306/${MYSQL_DATABASE}?useSSL=false&amp;allowPublicKeyRetrieval=true"/>
+
+</Context>

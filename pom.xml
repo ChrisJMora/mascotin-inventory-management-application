@@ -7,13 +7,12 @@
 	<version>1.0-SNAPSHOT</version>
 	<packaging>war</packaging>
 
+	<!-- ===== INFORMACIÓN DEL PROYECTO ===== -->
 	<name>Aplicación de Gestión de Inventario</name>
 	<description>
 		Herramienta desarrollada para optimizar el control de inventario en una tienda de mascotas, ofreciendo funciones clave como la gestión integral de productos clasificados en alimentos, accesorios e insumos veterinarios, cada uno con información detallada y segmentación por tipo de mascota. Incluye un sistema inteligente de planificación de reposiciones que analiza la demanda histórica, los niveles actuales de stock y los presupuestos disponibles para generar alertas y recomendaciones automáticas. Además, proporciona capacidades de análisis y generación de reportes para apoyar la toma de decisiones estratégicas, facilitando la evaluación del desempeño comercial y la identificación de patrones de consumo.
 	</description>
 	<url>https://github.com/ChrisJMora/mascotin-inventory-management-application.git</url>
-
-
 
 	<!-- ===== PROPIEDADES DEL PROYECTO ===== -->
 	<properties>
@@ -38,6 +37,40 @@
 		<maven.javadoc.plugin.version>3.5.0</maven.javadoc.plugin.version>
 		<maven.source.plugin.version>3.2.1</maven.source.plugin.version>
 	</properties>
+
+	<!-- ===== PERFILES DEL PROYECTO ===== -->
+	<profiles>
+		<!-- PERFIL DE DESARROLLO (dev) -->
+		<profile>
+			<id>dev</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+		</profile>
+
+		<!-- PERFIL DE PRODUCCIÓN (prod) -->
+		<profile>
+			<id>prod</id>
+			<properties>
+				<!-- Saltar validaciones y análisis de código en producción -->
+				<skipTests>true</skipTests>
+				<checkstyle.skip>true</checkstyle.skip>
+				<pmd.skip>true</pmd.skip>
+				<jacoco.skip>true</jacoco.skip>
+				<enforcer.skip>true</enforcer.skip>
+				<maven.javadoc.skip>true</maven.javadoc.skip>
+				<maven.source.skip>true</maven.source.skip>
+			</properties>
+			<dependencies>
+				<!-- MySQL -->
+				<dependency>
+					<groupId>com.mysql</groupId>
+					<artifactId>mysql-connector-j</artifactId>
+					<version>9.2.0</version>
+				</dependency>
+			</dependencies>
+		</profile>
+	</profiles>
 
 	<!-- ===== GESTIÓN DE DEPENDENCIAS ===== -->
 	<dependencyManagement>
@@ -81,14 +114,6 @@
 		from the below dependencies. If you don't find yours, look in
 		internet for the maven depencency for your database and add it 
 		here yourself.
-		-->
-		
-		<!-- MySQL 
-		<dependency>
-			<groupId>com.mysql</groupId>
-			<artifactId>mysql-connector-j</artifactId>		
-    		<version>9.3.0</version>
-		</dependency>
 		-->
 		
 		<!-- PostgreSQL 
