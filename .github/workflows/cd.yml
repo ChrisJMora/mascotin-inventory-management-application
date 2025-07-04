@@ -78,7 +78,7 @@ jobs:
 
       # Paso 5: Esperar a que MySQL esté disponible en el puerto 3306
       - name: Esperar a MySQL
-        run: ./wait-for-it.sh db:3306 --timeout=60 --strict -- echo "MySQL disponible"
+        run: ./wait-for-it.sh localhost:3306 --timeout=60 --strict -- echo "MySQL disponible"
 
       # Paso 6: Esperar a que la aplicación web esté disponible en el puerto 8080
       - name: Esperar a la Aplicación
