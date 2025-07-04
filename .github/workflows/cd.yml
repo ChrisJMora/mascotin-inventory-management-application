@@ -90,19 +90,23 @@ jobs:
     needs: run-containers  # Este job se ejecuta después de levantar los contenedores
 
     steps:
-      # Paso 1: Verificar que la aplicación responda correctamente
+      # Paso 1: Verificar si los contenedores están activos
+      - name: Listar contenedores activos
+        run: docker ps
+
+      # Paso 2: Verificar que la aplicación responda correctamente
       - name: Validar respuesta HTTP de la aplicación
         run: |
           curl --fail http://localhost:8080 || (echo "La aplicación no responde correctamente" && exit 1)
 
-      # Paso 2: Verificar que la base de datos fue creada correctamente
+      # Paso 3: Verificar que la base de datos fue creada correctamente
       - name: Verificar existencia de base de datos
         run: |
           docker exec $(docker ps -qf "name=db") \
             mysql -u${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASSWORD }} \
             -e "SHOW DATABASES;" | grep ${{ secrets.MYSQL_DATABASE }}
 
-      # Paso 3: Apagar los contenedores luego de las validaciones
+      # Paso 4: Apagar los contenedores luego de las validaciones
       - name: Apagar contenedores
         if: always()  # Este paso se ejecuta siempre, incluso si una validación falla
         run: docker compose down
