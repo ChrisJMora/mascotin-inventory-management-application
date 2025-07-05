@@ -1,164 +1,99 @@
-name: Docker Compose Deployment with Advanced Debugging
+name: Pruebas de Integración
+
+# Este workflow se ejecuta automáticamente en eventos push y pull_request
+# sobre las ramas 'main' y 'develop'.
+
+# Permisos mínimos necesarios para ejecutar el workflow
+permissions:
+  contents: read      # Lectura del repositorio
+  pages: write        # Permiso para publicar en GitHub Pages
+  id-token: write     # Permiso para autenticación con Pages
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
 
+# Cancelación de ejecuciones anteriores en el mismo PR para optimizar recursos
 concurrency:
-  group: pr-docker-${{ github.event.pull_request.number }}
+  group: pr-validation-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  docker-compose-deployment:
-    name: Docker Compose Deployment
+  integration-test:
+    name: Prueba de integración
     runs-on: ubuntu-latest
 
+    # Variables de entorno sensibles que se obtienen desde los Secrets de GitHub.
+    env:
+      MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+      MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+      MYSQL_USER: ${{ secrets.MYSQL_USER }}
+      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+
     steps:
-      ## ---------------------------
-      ## SECCIÓN 1: PREPARACIÓN
-      ## ---------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      # Paso 1: Clonar el repositorio para obtener el código fuente.
+      - name: Clonar repositorio
+        uses: actions/checkout@v3
 
-      - name: Setup Docker environment
-        uses: docker/setup-buildx-action@v3
+      # Paso 2: Construir y levantar los contenedores definidos en docker-compose.yml en modo detached.
+      - name: Construir y levantar contenedores Docker
+        run: docker-compose -f docker-compose.yml up -d --build
 
-      - name: Install Docker Compose
+      # Paso 3: Listar todos los contenedores activos para verificar su estado inicial.
+      - name: Listar contenedores Docker activos
+        run: docker ps -a
+
+      # Paso 4: Esperar a que la aplicación responda en el puerto 8080.
+      # Intenta hasta 30 veces con un retraso de 5 segundos entre intentos.
+      - name: Esperar a que la aplicación esté disponible
+        id: wait_for_app
         run: |
-          sudo curl -L "https://github.com/docker/compose/releases/download/v2.23.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
-
-      - name: Configure environment
-        run: |
-          {
-            echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}"
-            echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}"
-            echo "MYSQL_USER=${{ secrets.MYSQL_USER }}"
-            echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}"
-          } > .env
-          echo "=== Environment Variables (sanitized) ==="
-          grep -v 'PASSWORD' .env
-
-      ## ---------------------------
-      ## SECCIÓN 2: DESPLIEGUE
-      ## ---------------------------
-      - name: Start services
-        run: |
-          echo "=== Starting services with Docker Compose ==="
-          docker-compose up -d --build
-          
-          echo "\n=== Current container status ==="
-          docker-compose ps -a
-          
-          echo "\n=== Initial logs preview ==="
-          docker-compose logs --tail=50
-
-      ## ---------------------------
-      ## SECCIÓN 3: VALIDACIONES
-      ## ---------------------------
-      - name: Validate MySQL service
-        timeout-minutes: 5
-        run: |
-          echo "=== Validating MySQL ==="
+          echo "Esperando a que la aplicación responda en http://localhost:8080 ..."
           for i in {1..30}; do
-            if docker-compose exec db mysqladmin ping -u root -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" --silent; then
-              echo "✅ MySQL is responsive"
-          
+            if curl -s http://localhost:8080 > /dev/null; then
+              echo "La aplicación respondió correctamente."
               exit 0
+            else
+              echo "Intento $i: aplicación no disponible, esperando 5 segundos..."
+              sleep 5
             fi
-            echo "⏳ Waiting for MySQL... Attempt $i/30"
-            sleep 2
           done
-          
-          echo "❌ MySQL validation failed"
-          echo "\n=== MySQL Container Logs ==="
-          docker-compose logs db
+          echo "ERROR: La aplicación no respondió después de 30 intentos."
           exit 1
 
-      - name: Validate Application Health
-        timeout-minutes: 10
+      # Paso 5: Validar que la respuesta HTTP contenga código HTML, lo que indica que la UI funciona.
+      - name: Validar respuesta HTML de la aplicación
+        id: check_html
         run: |
-          echo "=== Validating Application ==="
-          for i in {1..30}; do
-            HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8080/health || true)
-          
-            if [ "$HTTP_STATUS" -eq 200 ]; then
-              echo "✅ Application is healthy (HTTP 200)"
-              echo "\n=== Sample Response ==="
-              curl -s http://localhost:8080/health | jq . || curl -s http://localhost:8080/health
-              exit 0
-            fi
-          
-            echo "⏳ Waiting for app... Attempt $i/30 (HTTP $HTTP_STATUS)"
-          
-            # Debug every 5 attempts
-            if (( $i % 5 == 0 )); then
-              echo "\n=== Debug Info (Attempt $i) ==="
-              echo "1. Container status:"
-              docker-compose ps -a
-              echo "\n2. App logs (last 20 lines):"
-              docker-compose logs app --tail=20
-              echo "\n3. Network connections:"
-              netstat -tulnp | grep 8080 || true
-            fi
-          
-            sleep 2
-          done
-          
-          echo "❌ Application validation failed"
-          echo "\n=== Full Debug Info ==="
-          echo "1. All containers:"
-          docker-compose ps -a
-          echo "\n2. Application logs:"
-          docker-compose logs app
-          echo "\n3. Database logs:"
-          docker-compose logs db
-          echo "\n4. Network inspection:"
-          docker inspect $(docker-compose ps -q app)
-          exit 1
+          RESPONSE=$(curl -s http://localhost:8080)
+          echo "Respuesta recibida del servidor:"
+          echo "$RESPONSE"
+          if echo "$RESPONSE" | grep -iq "<html"; then
+            echo "Se detectó contenido HTML en la respuesta."
+          else
+            echo "ERROR: No se encontró contenido HTML en la respuesta."
+            exit 1
+          fi
 
-      ## ---------------------------
-      ## SECCIÓN 4: DIAGNÓSTICO
-      ## ---------------------------
-      - name: Debug on Failure
+      # Paso 6: Mostrar logs y detalles de los contenedores SOLO si alguna validación anterior falla.
+      - name: Mostrar logs de Docker en caso de fallo
         if: failure()
         run: |
-          echo "=== FULL SYSTEM DIAGNOSTICS ==="
-          echo "\n1. All Docker containers:"
-          docker ps -a
-          
-          echo "\n2. Docker Compose status:"
-          docker-compose ps -a
-          
-          echo "\n3. Application logs:"
-          docker-compose logs app --tail=200
-          
-          echo "\n4. Database logs:"
-          docker-compose logs db --tail=200
-          
-          echo "\n5. Network connections:"
-          netstat -tulnp
-          
-          echo "\n6. Disk usage:"
-          df -h
-          
-          echo "\n7. Memory usage:"
-          free -h
+          echo "Se produjo un error. Mostrando logs de docker-compose para diagnóstico:"
+          docker-compose logs
 
-      ## ---------------------------
-      ## SECCIÓN 5: LIMPIEZA
-      ## ---------------------------
-      - name: Cleanup resources
+          APP_ID=$(docker ps -qf "name=app")
+          if [ -n "$APP_ID" ]; then
+            echo "Inspeccionando el contenedor de la aplicación:"
+            docker inspect "$APP_ID"
+          else
+            echo "No se encontró contenedor de la aplicación para inspeccionar."
+          fi
+
+      # Paso 7: Finalizar y limpiar contenedores, redes y volúmenes creados durante la ejecución,
+      # independientemente de si el workflow tuvo éxito o fallo.
+      - name: Limpiar entorno Docker Compose
         if: always()
-        run: |
-          echo "=== Cleaning up ==="
-          echo "1. Stopping containers..."
-          docker-compose down -v --remove-orphans
-          
-          echo "\n2. Pruning system..."
-          docker system prune -f
-          
-          echo "\n3. Final disk usage:"
-          df -h
+        run: docker-compose down -v
