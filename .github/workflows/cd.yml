@@ -39,7 +39,7 @@ jobs:
 
       # Paso 2: Construir y levantar los contenedores definidos en docker-compose.yml en modo detached.
       - name: Construir y levantar contenedores Docker
-        run: docker-compose -f docker-compose.yml up -d --build
+        run: docker compose -f docker-compose.yml up -d --build
 
       # Paso 3: Listar todos los contenedores activos para verificar su estado inicial.
       - name: Listar contenedores Docker activos
@@ -96,4 +96,4 @@ jobs:
       # independientemente de si el workflow tuvo éxito o fallo.
       - name: Limpiar entorno Docker Compose
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v
