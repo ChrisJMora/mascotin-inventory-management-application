@@ -1,0 +1,101 @@
+name: Pruebas de Integración
+
+# Este workflow se ejecuta automáticamente en eventos push y pull_request
+# sobre las ramas 'main' y 'develop'.
+
+# Permisos mínimos necesarios para ejecutar el workflow
+permissions:
+  contents: read      # Lectura del repositorio
+  pages: write        # Permiso para publicar en GitHub Pages
+  id-token: write     # Permiso para autenticación con Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancelación de ejecuciones anteriores en el mismo PR para optimizar recursos
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  integration-test:
+    name: Prueba de integración
+    runs-on: ubuntu-latest
+
+    # Variables de entorno sensibles que se obtienen desde los Secrets de GitHub.
+    env:
+      MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+      MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+      MYSQL_USER: ${{ secrets.MYSQL_USER }}
+      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+
+    steps:
+      # Paso 1: Clonar el repositorio para obtener el código fuente.
+      - name: Clonar repositorio
+        uses: actions/checkout@v3
+
+      # Paso 2: Construir y levantar los contenedores definidos en docker-compose.yml en modo detached.
+      - name: Construir y levantar contenedores Docker
+        run: docker compose -f docker-compose.yml up -d --build
+
+      # Paso 3: Listar todos los contenedores activos para verificar su estado inicial.
+      - name: Listar contenedores Docker activos
+        run: docker ps -a
+
+      # Paso 4: Esperar a que la aplicación responda en el puerto 8080.
+      # Intenta hasta 30 veces con un retraso de 5 segundos entre intentos.
+      - name: Esperar a que la aplicación esté disponible
+        id: wait_for_app
+        run: |
+          echo "Esperando a que la aplicación responda en http://localhost:8080 ..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8080 > /dev/null; then
+              echo -e "\033[0;32mLa aplicación respondió correctamente.\033[0m"
+              exit 0
+            else
+              echo -e "\033[0;31mIntento $i: aplicación no disponible, esperando 5 segundos...\033[0m"
+              sleep 5
+            fi
+          done
+          echo -e "\033[0;31mERROR: La aplicación no respondió después de 30 intentos.\033[0m"
+          exit 1
+
+      # Paso 5: Validar que la respuesta HTTP contenga código HTML, lo que indica que la UI funciona.
+      - name: Validar respuesta HTML de la aplicación
+        id: check_html
+        run: |
+          RESPONSE=$(curl -s http://localhost:8080)
+          echo "Respuesta recibida del servidor:"
+          echo "$RESPONSE"
+          if echo "$RESPONSE" | grep -iq "<html"; then
+            echo -e "\033[0;32mSe detectó contenido HTML en la respuesta.\033[0m"
+          else
+            echo -e "\033[0;31mERROR: No se encontró contenido HTML en la respuesta.\033[0m"
+            exit 1
+          fi
+
+      # Paso 6: Mostrar logs y detalles de los contenedores SOLO si alguna validación anterior falla.
+      - name: Mostrar logs de Docker en caso de fallo
+        if: failure()
+        run: |
+          echo -e "\033[0;31mSe produjo un error. Mostrando logs de docker-compose para diagnóstico:\033[0m"
+          docker compose logs
+
+          APP_ID=$(docker ps -qf "name=app")
+          if [ -n "$APP_ID" ]; then
+            echo -e "\033[0;31mInspeccionando el contenedor de la aplicación:\033[0m"
+            docker inspect "$APP_ID"
+          else
+            echo -e "\033[0;31mNo se encontró contenedor de la aplicación para inspeccionar.\033[0m"
+          fi
+
+      # Paso 7: Finalizar y limpiar contenedores, redes y volúmenes creados durante la ejecución,
+      # independientemente de si el workflow tuvo éxito o fallo.
+      - name: Limpiar entorno Docker Compose
+        if: always()
+        run: |
+          echo -e "\033[0;32mLimpiando entorno Docker Compose...\033[0m"
+          docker compose down -v
