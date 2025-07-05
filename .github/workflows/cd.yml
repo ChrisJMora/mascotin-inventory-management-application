@@ -53,14 +53,14 @@ jobs:
           echo "Esperando a que la aplicación responda en http://localhost:8080 ..."
           for i in {1..30}; do
             if curl -s http://localhost:8080 > /dev/null; then
-              echo "La aplicación respondió correctamente."
+              echo -e "\033[0;32mLa aplicación respondió correctamente.\033[0m"
               exit 0
             else
-              echo "Intento $i: aplicación no disponible, esperando 5 segundos..."
+              echo -e "\033[0;31mIntento $i: aplicación no disponible, esperando 5 segundos...\033[0m"
               sleep 5
             fi
           done
-          echo "ERROR: La aplicación no respondió después de 30 intentos."
+          echo -e "\033[0;31mERROR: La aplicación no respondió después de 30 intentos.\033[0m"
           exit 1
 
       # Paso 5: Validar que la respuesta HTTP contenga código HTML, lo que indica que la UI funciona.
@@ -71,9 +71,9 @@ jobs:
           echo "Respuesta recibida del servidor:"
           echo "$RESPONSE"
           if echo "$RESPONSE" | grep -iq "<html"; then
-            echo "Se detectó contenido HTML en la respuesta."
+            echo -e "\033[0;32mSe detectó contenido HTML en la respuesta.\033[0m"
           else
-            echo "ERROR: No se encontró contenido HTML en la respuesta."
+            echo -e "\033[0;31mERROR: No se encontró contenido HTML en la respuesta.\033[0m"
             exit 1
           fi
 
@@ -81,19 +81,21 @@ jobs:
       - name: Mostrar logs de Docker en caso de fallo
         if: failure()
         run: |
-          echo "Se produjo un error. Mostrando logs de docker-compose para diagnóstico:"
-          docker-compose logs
+          echo -e "\033[0;31mSe produjo un error. Mostrando logs de docker-compose para diagnóstico:\033[0m"
+          docker compose logs
 
           APP_ID=$(docker ps -qf "name=app")
           if [ -n "$APP_ID" ]; then
-            echo "Inspeccionando el contenedor de la aplicación:"
+            echo -e "\033[0;31mInspeccionando el contenedor de la aplicación:\033[0m"
             docker inspect "$APP_ID"
           else
-            echo "No se encontró contenedor de la aplicación para inspeccionar."
+            echo -e "\033[0;31mNo se encontró contenedor de la aplicación para inspeccionar.\033[0m"
           fi
 
       # Paso 7: Finalizar y limpiar contenedores, redes y volúmenes creados durante la ejecución,
       # independientemente de si el workflow tuvo éxito o fallo.
       - name: Limpiar entorno Docker Compose
         if: always()
-        run: docker compose down -v
+        run: |
+          echo -e "\033[0;32mLimpiando entorno Docker Compose...\033[0m"
+          docker compose down -v
