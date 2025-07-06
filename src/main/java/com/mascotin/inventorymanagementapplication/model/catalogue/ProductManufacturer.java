@@ -1,5 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model.catalogue;
 
-public enum Manufacturer {
+public enum ProductManufacturer {
     SOLDIS, DISASVET, EQUADIS, PORTALVET
 }

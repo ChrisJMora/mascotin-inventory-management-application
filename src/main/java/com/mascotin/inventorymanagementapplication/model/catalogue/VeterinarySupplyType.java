@@ -1,5 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model.catalogue;
 
-public enum SupplyType {
+public enum VeterinarySupplyType {
     ANTIPARASITARIO, VITAMINAS, PROBIOTICOS
 }

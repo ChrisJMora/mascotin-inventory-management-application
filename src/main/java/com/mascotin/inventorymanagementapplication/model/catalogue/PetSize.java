@@ -1,5 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model.catalogue;
 
-public enum Size {
+public enum PetSize {
     PEQUENIA, MEDIANA, GRANDE, TODAS
 }

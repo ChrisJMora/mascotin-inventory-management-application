@@ -1,5 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model.catalogue;
 
-public enum Age {
-    CACHORRO, ADULTO, TODAS
+public enum PetSpecie {
+    PERRO, GATO, AVE, TODAS
 }

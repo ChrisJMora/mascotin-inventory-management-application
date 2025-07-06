@@ -1,5 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model.catalogue;
 
-public enum Specie {
-    PERRO, GATO, AVE, TODAS
+public enum ProductStatus {
+    AVAILABLE, OUT_OF_STOCK
 }

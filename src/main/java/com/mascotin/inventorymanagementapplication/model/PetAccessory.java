@@ -10,6 +10,7 @@ import javax.persistence.*;
 @Entity
 @Getter @Setter
 @NoArgsConstructor
+@DiscriminatorValue("PET_ACCESSORY")
 public class PetAccessory extends Product {
     @Required
     @Enumerated(EnumType.STRING)

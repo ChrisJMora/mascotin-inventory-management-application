@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 @Entity
 @Getter @Setter
 @NoArgsConstructor
+@DiscriminatorValue("PET_FOOD")
 public class PetFood extends Product {
     @Required
     @Enumerated(EnumType.STRING)
