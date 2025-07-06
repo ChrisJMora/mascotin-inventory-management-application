@@ -1,4 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model;
+import com.mascotin.inventorymanagementapplication.calculator.ProductDefaultDiscountCalculator;
 import com.mascotin.inventorymanagementapplication.model.catalogue.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -10,10 +11,11 @@ import java.math.BigDecimal;
 
 @Entity
 @Inheritance(strategy = InheritanceType.JOINED)
+@DiscriminatorColumn(name = "TIPO_ENTIDAD")
 @Getter @Setter
 @NoArgsConstructor
-@SuppressWarnings({"PMD.CyclomaticComplexity"})
-public abstract class Product {
+@SuppressWarnings({"PMD.CyclomaticComplexity", "PMD.UnnecessaryAnnotationValueElement"})
+public class Product {
 
     @Id @Hidden
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,59 +27,58 @@ public abstract class Product {
 
     @Column(length = 50)
     @Required
-    private String nombre;
+    private String name;
 
     @Stereotype("MONEY")
     @Required
-    private BigDecimal precio;  // Precio de venta
+    private BigDecimal sellPrice;  // Precio de venta
 
     @Stereotype("MONEY")
     @Required
-    private BigDecimal costo;  // Costo de compra
+    private BigDecimal purchaseCost;  // Costo de compra
 
     @Required
-    private BigDecimal descuento = BigDecimal.ZERO;  // Entre 0.00 y 1.00
-
-    @Required
-    @Enumerated(EnumType.STRING)
-    private Manufacturer fabricante;
-
-    @Enumerated(EnumType.STRING)
-    @Required
-    private Brand marca;
+    @DefaultValueCalculator(value = ProductDefaultDiscountCalculator.class)
+    private BigDecimal sellDiscount;  // Entre 0.00 y 1.00
 
     @Required
     @Enumerated(EnumType.STRING)
-    private Specie especie;
+    private ProductManufacturer manufacturer;
 
     @Required
     @Enumerated(EnumType.STRING)
-    private Age edad;
+    private ProductBrand brand;
 
     @Required
     @Enumerated(EnumType.STRING)
-    private Size raza;
+    private PetSpecie petSpecie;
 
+    @Required
+    @Enumerated(EnumType.STRING)
+    private PetAge petAge;
+
+    @Required
+    @Enumerated(EnumType.STRING)
+    private PetSize petBreed;
+
+    @Required
     private int stock;
 
-    @Column(name = "CATEGORY", insertable = false, updatable = false)
-    private String category;
-
-    public String getCategory() {
-        return this.getClass().getSimpleName();
-    }
+    @Required
+    @Enumerated(EnumType.STRING)
+    private ProductStatus productStatus;
 
     @PrePersist @PreUpdate
     private void validate() {
-        if (precio == null || precio.compareTo(BigDecimal.ZERO) <= 0) {
+        if (sellPrice == null || sellPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ValidationException("El precio debe ser mayor a 0");
         }
 
-        if (costo == null || costo.compareTo(BigDecimal.ZERO) <= 0) {
+        if (purchaseCost == null || purchaseCost.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ValidationException("El costo de compra debe ser mayor a 0");
         }
 
-        if (descuento == null || descuento.compareTo(BigDecimal.ZERO) < 0 || descuento.compareTo(BigDecimal.ONE) > 0) {
+        if (sellDiscount == null || sellDiscount.compareTo(BigDecimal.ZERO) < 0 || sellDiscount.compareTo(BigDecimal.ONE) > 0) {
             throw new ValidationException("El descuento debe estar entre 0.00 y 1.00");
         }
     }

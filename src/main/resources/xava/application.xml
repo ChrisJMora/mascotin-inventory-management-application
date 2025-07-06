@@ -19,5 +19,20 @@
 		<controller name="Print"/>
 	</module>		
 	-->
-	
+
+	<module name="Product">
+		<model name="Product"/>
+		<controller name="EditOnlyController"/>
+	</module>
+
+	<module name="PurchaseOrder">
+		<model name="PurchaseOrder"/>
+		<controller name="CreateOnlyController"/>
+	</module>
+
+	<module name="RestockInventoryPlanner">
+		<model name="RestockInventoryPlanner"/>
+		<controller name="RestockPlan"/>
+	</module>
+
 </application>
