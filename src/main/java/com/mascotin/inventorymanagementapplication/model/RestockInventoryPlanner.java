@@ -6,7 +6,6 @@ import lombok.Setter;
 import org.openxava.annotations.*;
 
 import javax.persistence.ElementCollection;
-import javax.persistence.Embedded;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import java.math.BigDecimal;
@@ -18,7 +17,7 @@ import java.util.Collection;
 public class RestockInventoryPlanner {
     @Id
     @Hidden
-    private int id = 1;
+    private int restockPlanId = 1;
 
     @Required
     @Stereotype("MONEY")

@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 @DiscriminatorColumn(name = "TIPO_ENTIDAD")
 @Getter @Setter
 @NoArgsConstructor
-@SuppressWarnings({"PMD.CyclomaticComplexity"})
+@SuppressWarnings({"PMD.CyclomaticComplexity", "PMD.UnnecessaryAnnotationValueElement"})
 public class Product {
 
     @Id @Hidden

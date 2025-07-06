@@ -14,38 +14,39 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
-public class RestockInventoryPlanGenerator {
+@SuppressWarnings({"PMD.LawOfDemeter", "PMD.AvoidInstantiatingObjectsInLoops"})
+public abstract class RestockInventoryPlanGenerator {
 
-    private static final int OPTIMAL_STOCK_DAYS = 15;
-    private static final int SECURITY_STOCK_dAYS = 5;
+    private static final int OPTIMAL_DAYS = 15;
+    private static final int SECURITY_DAYS = 5;
     private static final double HIGH_DEMAND = 10.0;
 
-    public static RestockPlanResult generatePlan(BigDecimal budget) throws Exception {
-        RestockPlanResult restockPlanResult = new RestockPlanResult();
+    public static RestockPlanResult generatePlan(final BigDecimal budget) {
+        final RestockPlanResult restockPlan = new RestockPlanResult();
         BigDecimal totalCost = BigDecimal.ZERO;
 
-        TypedQuery<Product> query = XPersistence.getManager()
+        final TypedQuery<Product> query = XPersistence.getManager()
                 .createQuery("from Product p where p.productStatus = :status", Product.class);
 
         query.setParameter("status", ProductStatus.AVAILABLE);
 
-        List<Product> products = query.getResultList();
+        final List<Product> products = query.getResultList();
 
-        for (Product product : products) {
+        for (final Product product : products) {
 
-            double averageDailySales = calculateAverageDailySales(product);
-            double optimalStock = averageDailySales * OPTIMAL_STOCK_DAYS;
-            double securityStock = averageDailySales * SECURITY_STOCK_dAYS;
+            final double averageDailySales = calculateAverageDailySales(product);
+            final double optimalStock = averageDailySales * OPTIMAL_DAYS;
+            final double securityStock = averageDailySales * SECURITY_DAYS;
 
             if (product.getStock() < securityStock) {
-                int baseAmount = (int) Math.ceil(optimalStock - product.getStock());
-                int adjustedAmount = adjustForDemand(baseAmount, averageDailySales);
+                final int baseAmount = (int) Math.ceil(optimalStock - product.getStock());
+                final int adjustedAmount = adjustForDemand(baseAmount, averageDailySales);
 
-                BigDecimal estimatedCost = product.getPurchaseCost()
+                final BigDecimal estimatedCost = product.getPurchaseCost()
                         .multiply(new BigDecimal(adjustedAmount));
 
                 if (totalCost.add(estimatedCost).compareTo(budget) <= 0) {
-                    restockPlanResult.getProductsToRestock().add(
+                    restockPlan.getProductsToRestock().add(
                             new ProductRestockDetail(
                                     product.getSku(),
                                     product.getName(),
@@ -55,27 +56,27 @@ public class RestockInventoryPlanGenerator {
                     );
                     totalCost = totalCost.add(estimatedCost);
                 } else if (averageDailySales > HIGH_DEMAND) {
-                    restockPlanResult.getCriticAlerts().add("Producto crítico no reponible: " +
+                    restockPlan.getCriticAlerts().add("Producto crítico no reponible: " +
                             product.getName() + " - Demanda: " + averageDailySales);
                 }
             }
         }
 
-        restockPlanResult.setPredictedBudget(totalCost);
-        return restockPlanResult;
+        restockPlan.setPredictedBudget(totalCost);
+        return restockPlan;
     }
 
-    private static double calculateAverageDailySales(Product product) {
-        TypedQuery<Long> query = XPersistence.getManager().createQuery(
+    private static double calculateAverageDailySales(final Product product) {
+        final TypedQuery<Long> query = XPersistence.getManager().createQuery(
                 "select sum(oi.quantity) from PurchaseOrder po " +
                         "join po.orderItems oi " +
                         "where oi.product = :product and po.orderDate >= :dateLimit", Long.class);
 
-        Calendar cal = Calendar.getInstance();
-        cal.add(Calendar.DAY_OF_YEAR, -30);
-        Date dateLimit = cal.getTime();
+        final Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.DAY_OF_YEAR, -30);
+        final Date dateLimit = calendar.getTime();
 
-        LocalDate localDateLimit = dateLimit.toInstant()
+        final LocalDate localDateLimit = dateLimit.toInstant()
                 .atZone(ZoneId.systemDefault()).toLocalDate();
 
         query.setParameter("product", product);
@@ -86,8 +87,13 @@ public class RestockInventoryPlanGenerator {
         return totalSales / 30.0;
     }
 
-    private static int adjustForDemand(int baseAmount, double demand) {
-        if (demand > HIGH_DEMAND) return baseAmount + 10;
-        return baseAmount;
+    private static int adjustForDemand(final int baseAmount, final double demand) {
+        int result;
+        if (demand > HIGH_DEMAND) {
+            result = baseAmount + 10;
+        } else {
+            result = baseAmount;
+        }
+        return result;
     }
 }

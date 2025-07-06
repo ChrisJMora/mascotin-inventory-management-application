@@ -19,6 +19,8 @@ import java.util.Collection;
 @Entity
 @Getter @Setter
 @NoArgsConstructor
+@SuppressWarnings({"PMD.CyclomaticComplexity", "PMD.LawOfDemeter",
+        "PMD.UnnecessaryAnnotationValueElement"})
 public class PurchaseOrder {
 
     @Id
@@ -46,28 +48,28 @@ public class PurchaseOrder {
             return; // No hay elementos para procesar
         }
 
-        EntityManager em = XPersistence.getManager();
-        for (OrderItem orderItem : orderItems) {
-            Product product = orderItem.getProduct();
-            int quantity = orderItem.getQuantity();
+        final EntityManager entityManager = XPersistence.getManager();
+        for (final OrderItem orderItem : orderItems) {
+            final Product product = orderItem.getProduct();
+            final int quantity = orderItem.getQuantity();
 
             if (product == null || quantity <= 0) {
                 throw new ValidationException("Producto o cantidad inválida en la línea de pedido");
             }
 
             // Cargar la entidad Product desde la base de datos para evitar problemas de persistencia
-            Product managedProduct = em.find(Product.class, product.getProductId());
+            final Product managedProduct = entityManager.find(Product.class, product.getProductId());
             if (managedProduct == null) {
                 throw new ValidationException("Producto no encontrado: " + product.getSku());
             }
 
-            int newStock = managedProduct.getStock() - quantity;
+            final int newStock = managedProduct.getStock() - quantity;
             if (newStock < 0) {
                 throw new ValidationException("Stock insuficiente para el producto: " + managedProduct.getName());
             }
 
             managedProduct.setStock(newStock);
-            em.merge(managedProduct); // Actualizar el producto en la base de datos
+            entityManager.merge(managedProduct); // Actualizar el producto en la base de datos
         }
     }
 }
