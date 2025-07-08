@@ -1,5 +1,6 @@
 package com.mascotin.inventorymanagementapplication.model;
 
+import com.mascotin.inventorymanagementapplication.calculator.DefaultZeroCalculator;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -8,6 +9,7 @@ import org.openxava.annotations.*;
 import javax.persistence.ElementCollection;
 import javax.persistence.Entity;
 import javax.persistence.Id;
+import javax.validation.constraints.DecimalMin;
 import java.math.BigDecimal;
 import java.util.Collection;
 
@@ -21,11 +23,9 @@ public class RestockInventoryPlanner {
 
     @Required
     @Stereotype("MONEY")
+    @DecimalMin("0")
+    @DefaultValueCalculator(DefaultZeroCalculator.class)
     private BigDecimal presupuesto;
-
-    @Stereotype("BUTTON")
-    @Action("RestockPlan.generate")
-    private String generarPlan;
 
     @ElementCollection
     @ListProperties("productSku, productName, restockAmount, estimatedCost")

@@ -25,6 +25,7 @@ public abstract class RestockInventoryPlanGenerator {
         final RestockPlanResult restockPlan = new RestockPlanResult();
         BigDecimal totalCost = BigDecimal.ZERO;
 
+        // Obtener todos los productos activos
         final TypedQuery<Product> query = XPersistence.getManager()
                 .createQuery("from Product p where p.productStatus = :status", Product.class);
 
@@ -32,6 +33,7 @@ public abstract class RestockInventoryPlanGenerator {
 
         final List<Product> products = query.getResultList();
 
+        // Procesar cada producto
         for (final Product product : products) {
 
             final double averageDailySales = calculateAverageDailySales(product);
@@ -68,7 +70,7 @@ public abstract class RestockInventoryPlanGenerator {
 
     private static double calculateAverageDailySales(final Product product) {
         final TypedQuery<Long> query = XPersistence.getManager().createQuery(
-                "select sum(oi.quantity) from PurchaseOrder po " +
+                "select sum(oi.amount) from PurchaseOrder po " +
                         "join po.orderItems oi " +
                         "where oi.product = :product and po.orderDate >= :dateLimit", Long.class);
 

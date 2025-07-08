@@ -1,29 +1,34 @@
 version: '3.8'
+
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    environment:
-      - JAVA_OPTS=-Xms512m -Xmx1024m
-      - MYSQL_HOST=db
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-    depends_on:
-      - db
-  db:
+  mysql:
     image: mysql:8.0
+    container_name: mascotin-mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ao49fmsk
+      MYSQL_DATABASE: miaplicaciondb
     ports:
       - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-volumes:
-  mysql-data:
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pao49fmsk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 90s
+    networks:
+      - mascotin-net
+
+  app:
+    build: .
+    container_name: mascotin-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    networks:
+      - mascotin-net
+
+networks:
+  mascotin-net:
+    driver: bridge

@@ -11,9 +11,7 @@ import org.openxava.util.*;
 public final class InventoryManagementApp {
 
 	public static void main(final String[] args) throws Exception {
-		if ("true".equals(System.getenv("USE_HSQLDB"))) {
-			DBServer.start("inventorymanagementapplication-db"); // To use your own database comment this line and configure src/main/webapp/META-INF/context.xml
-		}
+		DBServer.start("inventorymanagementapplication-db"); // To use your own database comment this line and configure src/main/webapp/META-INF/context.xml
 		AppServer.run("inventorymanagementapplication"); // Use AppServer.run("") to run in root context
 	}
 
