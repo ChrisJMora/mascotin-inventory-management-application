@@ -13,6 +13,7 @@ import org.openxava.jpa.XPersistence;
 import javax.persistence.*;
 import javax.validation.ValidationException;
 import javax.validation.constraints.AssertTrue;
+import javax.validation.constraints.FutureOrPresent;
 import java.time.LocalDate;
 import java.util.Collection;
 
@@ -29,11 +30,12 @@ public class PurchaseOrder {
     private Long orderId;
 
     @Required
+    @FutureOrPresent
     @DefaultValueCalculator(value = CurrentLocalDateCalculator.class)
     private LocalDate orderDate;
 
     @ElementCollection
-    @ListProperties("product.sku, product.name, quantity")
+    @ListProperties("product.sku, product.name, amount")
     private Collection<OrderItem> orderItems;
 
     @AssertTrue(message = "Debe haber al menos un ítem en la orden")
@@ -51,7 +53,7 @@ public class PurchaseOrder {
         final EntityManager entityManager = XPersistence.getManager();
         for (final OrderItem orderItem : orderItems) {
             final Product product = orderItem.getProduct();
-            final int quantity = orderItem.getQuantity();
+            final int quantity = orderItem.getAmount();
 
             if (product == null || quantity <= 0) {
                 throw new ValidationException("Producto o cantidad inválida en la línea de pedido");

@@ -1,0 +1,167 @@
+@startuml Inventory Management System Class Diagram
+
+!theme plain
+skinparam backgroundColor white
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam packageStyle rectangle
+
+package "Model Classes" {
+    
+    abstract class Product {
+        - Long productId
+        - String sku
+        - String name
+        - BigDecimal sellPrice
+        - BigDecimal purchaseCost
+        - BigDecimal sellDiscount
+        - ProductManufacturer manufacturer
+        - ProductBrand brand
+        - PetSpecie petSpecie
+        - PetAge petAge
+        - PetSize petSize
+        - int stock
+        - ProductStatus productStatus
+        --
+        - validate() : void
+    }
+    
+    class PetFood extends Product {
+        - FoodType tipo
+        - BigDecimal contenido
+        --
+        - validateFood() : void
+    }
+    
+    class PetAccessory extends Product {
+        - AccessoryType tipo
+    }
+    
+    class PetVeterinarySupplies extends Product {
+        - VeterinarySupplyType tipo
+        - BigDecimal contenido
+        --
+        - validateSupply() : void
+    }
+    
+    class PurchaseOrder {
+        - Long orderId
+        - LocalDate orderDate
+        - Collection<OrderItem> orderItems
+        --
+        - isOrderItemsValid() : boolean
+        - updateProductStock() : void
+    }
+    
+    class OrderItem {
+        - Product product
+        - int amount
+        --
+        + getSubtotal() : BigDecimal
+    }
+    
+    class RestockInventoryPlanner {
+        - int restockPlanId
+        - BigDecimal presupuesto
+        - String generarPlan
+        - Collection<ProductRestockDetail> productsToRestock
+    }
+    
+    class ProductRestockDetail {
+        - String productSku
+        - String productName
+        - int restockAmount
+        - BigDecimal estimatedCost
+    }
+}
+
+package "Catalogue Enums" {
+    
+    enum ProductManufacturer {
+        SOLDIS
+        DISASVET
+        EQUADIS
+        PORTALVET
+    }
+    
+    enum ProductBrand {
+        AGRIPAC
+        PRONACA
+        BIOALIMENTAR
+        PURINA
+        ALBEX
+    }
+    
+    enum ProductStatus {
+        AVAILABLE
+        OUT_OF_STOCK
+    }
+    
+    enum PetSpecie {
+        PERRO
+        GATO
+        AVE
+        TODAS
+    }
+    
+    enum PetAge {
+        CACHORRO
+        ADULTO
+        TODAS
+    }
+    
+    enum PetSize {
+        PEQUENIA
+        MEDIANA
+        GRANDE
+        TODAS
+    }
+    
+    enum FoodType {
+        BASICA
+        PREMIUM
+    }
+    
+    enum AccessoryType {
+        JUGUETE
+        ARTICULO_DE_ASEO
+        ROPA
+    }
+    
+    enum VeterinarySupplyType {
+        ANTIPARASITARIO
+        VITAMINAS
+        PROBIOTICOS
+    }
+}
+
+' Inheritance relationships
+Product <|-- PetFood
+Product <|-- PetAccessory
+Product <|-- PetVeterinarySupplies
+
+' Composition relationships
+PurchaseOrder *-- OrderItem : contains
+RestockInventoryPlanner *-- ProductRestockDetail : contains
+
+' Association relationships
+OrderItem --> Product : references
+Product --> ProductManufacturer : uses
+Product --> ProductBrand : uses
+Product --> PetSpecie : uses
+Product --> PetAge : uses
+Product --> PetSize : uses
+Product --> ProductStatus : uses
+
+' Specific enum relationships for subclasses
+PetFood --> FoodType : uses
+PetAccessory --> AccessoryType : uses
+PetVeterinarySupplies --> VeterinarySupplyType : uses
+
+' Notes for better understanding
+note right of Product : "Abstract base class for all products\nUses inheritance strategy JOINED"
+note right of PurchaseOrder : "Updates product stock\nwhen order is persisted"
+note right of OrderItem : "Embedded in PurchaseOrder\nCalculates subtotal with discount"
+note right of RestockInventoryPlanner : "Singleton entity for\ninventory planning"
+
+@enduml

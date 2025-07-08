@@ -1,5 +1,5 @@
 package com.mascotin.inventorymanagementapplication.model;
-import com.mascotin.inventorymanagementapplication.calculator.ProductDefaultDiscountCalculator;
+import com.mascotin.inventorymanagementapplication.calculator.DefaultZeroCalculator;
 import com.mascotin.inventorymanagementapplication.model.catalogue.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -7,6 +7,8 @@ import lombok.Setter;
 import org.openxava.annotations.*;
 import javax.persistence.*;
 import javax.validation.ValidationException;
+import javax.validation.constraints.DecimalMax;
+import javax.validation.constraints.DecimalMin;
 import java.math.BigDecimal;
 
 @Entity
@@ -14,7 +16,7 @@ import java.math.BigDecimal;
 @DiscriminatorColumn(name = "TIPO_ENTIDAD")
 @Getter @Setter
 @NoArgsConstructor
-@SuppressWarnings({"PMD.CyclomaticComplexity", "PMD.UnnecessaryAnnotationValueElement"})
+@SuppressWarnings({"PMD.CyclomaticComplexity"})
 public class Product {
 
     @Id @Hidden
@@ -29,16 +31,21 @@ public class Product {
     @Required
     private String name;
 
-    @Stereotype("MONEY")
     @Required
+    @Stereotype("MONEY")
+    @DecimalMin("0")
+    @DefaultValueCalculator(DefaultZeroCalculator.class)
     private BigDecimal sellPrice;  // Precio de venta
 
-    @Stereotype("MONEY")
     @Required
+    @Stereotype("MONEY")
+    @DecimalMin("0")
+    @DefaultValueCalculator(DefaultZeroCalculator.class)
     private BigDecimal purchaseCost;  // Costo de compra
 
-    @Required
-    @DefaultValueCalculator(value = ProductDefaultDiscountCalculator.class)
+    @DecimalMin("0")
+    @DecimalMax("1")
+    @DefaultValueCalculator(DefaultZeroCalculator.class)
     private BigDecimal sellDiscount;  // Entre 0.00 y 1.00
 
     @Required
@@ -59,9 +66,12 @@ public class Product {
 
     @Required
     @Enumerated(EnumType.STRING)
-    private PetSize petBreed;
+    private PetSize petSize;
 
     @Required
+    @DecimalMin("0")
+    @DecimalMax("5000")
+    @DefaultValueCalculator(DefaultZeroCalculator.class)
     private int stock;
 
     @Required
